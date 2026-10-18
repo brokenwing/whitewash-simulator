@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>公关洗地模拟器</title>
+  <meta name="description" content="结合 LLM 的中式公关洗地模拟器：删帖、控评、水军、召唤铁拳，与对手盘博弈。">
+  <link rel="stylesheet" href="css/common.css">
+  <link rel="stylesheet" href="css/game.css">
+</head>
+<body>
+  <div id="app"><div class="empty">加载中……</div></div>
+  <noscript>这个游戏需要启用 JavaScript。</noscript>
+
+  <!-- core -->
+  <script src="js/core/ns.js"></script>
+  <script src="js/core/util.js"></script>
+  <script src="js/core/bus.js"></script>
+  <script src="js/core/storage.js"></script>
+  <!-- default data -->
+  <script src="js/data/platforms.js"></script>
+  <script src="js/data/factions.js"></script>
+  <script src="js/data/personas.js"></script>
+  <script src="js/data/pools.js"></script>
+  <script src="js/data/statements.js"></script>
+  <script src="js/data/items.js"></script>
+  <script src="js/data/abilities.js"></script>
+  <script src="js/data/difficulty.js"></script>
+  <!-- engine -->
+  <script src="js/engine/cond.js"></script>
+  <script src="js/engine/effects.js"></script>
+  <script src="js/engine/schema.js"></script>
+  <script src="js/engine/feed.js"></script>
+  <script src="js/engine/items.js"></script>
+  <script src="js/engine/truth.js"></script>
+  <script src="js/engine/actions.js"></script>
+  <script src="js/engine/sim.js"></script>
+  <script src="js/engine/objectives.js"></script>
+  <script src="js/engine/opponents.js"></script>
+  <script src="js/engine/events.js"></script>
+  <script src="js/engine/scoring.js"></script>
+  <script src="js/engine/engine.js"></script>
+  <script src="js/engine/levels.js"></script>
+  <!-- AI -->
+  <script src="js/llm/offline.js"></script>
+  <script src="js/llm/shape.js"></script>
+  <script src="js/llm/client.js"></script>
+  <script src="js/llm/prompts.js"></script>
+  <!-- UI -->
+  <script src="js/ui/dom.js"></script>
+  <script src="js/ui/charts.js"></script>
+  <script src="js/ui/settings.js"></script>
+  <script src="js/ui/statement.js"></script>
+  <script src="js/ui/items.js"></script>
+  <script src="js/ui/game.js"></script>
+  <script src="js/ui/app.js"></script>
+  <!-- built-in level list (level files are loaded from it at startup) -->
+  <script src="levels/manifest.js"></script>
+</body>
+</html>
