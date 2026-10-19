@@ -50,7 +50,7 @@
       h('label', { class: 'check' }, structured, '结构化输出（output_config.format，Claude 官方支持；中转报错时可关闭）'),
       h('label', { class: 'check' }, fallbacks, '拒答时服务端自动回退（仅官方地址生效）'));
     var openaiOnly = h('div', { class: 'col' },
-      h('label', { class: 'check' }, jsonMode, 'JSON 模式（response_format；服务商不支持会自动降级）'),
+      h('label', { class: 'check' }, jsonMode, 'JSON 模式（response_format：json_schema / json_object；服务商不支持会自动降级）'),
       field('Temperature', temperature));
 
     var syncPreset = function (applyDefaults) {

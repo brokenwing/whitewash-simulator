@@ -29,7 +29,7 @@
     { id: 'openrouter', name: 'OpenRouter', format: 'openai', baseURL: 'https://openrouter.ai/api/v1', models: ['deepseek/deepseek-chat', 'qwen/qwen-2.5-72b-instruct'], keyHint: 'sk-or-…' },
     { id: 'gemini', name: 'Google Gemini', format: 'openai', baseURL: 'https://generativelanguage.googleapis.com/v1beta/openai', models: ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.5-flash-lite'], keyHint: 'AIza…（Google AI Studio 获取）' },
     { id: 'ollama', name: '本地 Ollama', format: 'openai', baseURL: 'http://localhost:11434/v1', models: ['qwen2.5:14b', 'qwen2.5:7b'], keyHint: '无需 Key', noKey: true },
-    { id: 'lmstudio', name: '本地 LM Studio', format: 'openai', baseURL: 'http://localhost:1234/v1', models: [], keyHint: '无需 Key；模型处填 LM Studio 中已加载模型的标识，并在服务器设置里开启 CORS', noKey: true },
+    { id: 'lmstudio', name: '本地 LM Studio', format: 'openai', baseURL: 'http://localhost:1234/v1', models: [], keyHint: '无需 Key；模型处填 LM Studio 中已加载模型的标识，并在服务器设置里开启 CORS', noKey: true, jsonFormat: 'json_schema' },
     { id: 'custom', name: '自定义（OpenAI 兼容）', format: 'openai', baseURL: '', models: [], keyHint: '' }
   ];
 
@@ -315,6 +315,14 @@
     return pump();
   }
 
+  /* JSON modes to try, most structured first for providers known to support schemas (preset.jsonFormat). */
+  var jsonModeMemo = {};
+  function jsonModes(s) {
+    var p = preset(s.provider);
+    var first = (p && p.jsonFormat) || 'json_object';
+    return [first].concat(['json_schema', 'json_object'].filter(function (m) { return m !== first; })).concat(['none']);
+  }
+
   function openaiChat(s, key, o) {
     var url = effectiveBase(s) + '/chat/completions';
     var sys = o.system + (o.shape ? '\n\n【输出格式】只输出一个 JSON 对象，结构为：' + WW.Shape.describe(o.shape) : '');
@@ -324,7 +332,15 @@
       temperature: Number(s.temperature),
       max_tokens: Math.min(o.maxTokens || 4096, 8000)
     };
-    if (o.shape && s.jsonMode) body.response_format = { type: 'json_object' };
+    var modes = o.shape && s.jsonMode ? jsonModes(s) : ['none'];
+    var memoKey = s.baseURL + '|' + s.model;
+    var mi = Math.min(jsonModeMemo[memoKey] || 0, modes.length - 1);
+    var applyMode = function () {
+      if (modes[mi] === 'json_schema') body.response_format = { type: 'json_schema', json_schema: { name: 'output', strict: true, schema: WW.Shape.toJSONSchema(o.shape) } };
+      else if (modes[mi] === 'json_object') body.response_format = { type: 'json_object' };
+      else delete body.response_format;
+    };
+    applyMode();
     if (o.stream && o.onText) body.stream = true;
     var headers = { 'Content-Type': 'application/json' };
     if (key) headers.Authorization = 'Bearer ' + key;
@@ -343,13 +359,20 @@
         return retry();
       });
     };
-    return send().then(function (res) {
-      if (res.status === 400 && body.response_format) {
-        delete body.response_format;
-        return send();
-      }
-      return res;
-    }).then(function (res) {
+    /* a 400 while a JSON mode is set: step down json_schema -> json_object -> none; remember the
+       mode that worked for this endpoint so later calls skip the rejected ones */
+    var sendWithMode = function () {
+      return send().then(function (res) {
+        if (res.status === 400 && body.response_format && mi < modes.length - 1) {
+          mi++;
+          applyMode();
+          return sendWithMode();
+        }
+        if (res.ok) jsonModeMemo[memoKey] = mi;
+        return res;
+      });
+    };
+    return sendWithMode().then(function (res) {
       if (!res.ok) return res.text().then(function (t) { throw httpError(res.status, t); });
       if (body.stream) {
         var text = '';
@@ -437,6 +460,6 @@
     test: test,
     logs: logs,
     onSettings: function (fn) { listeners.push(fn); },
-    resetCompat: function () { compatMode = false; }
+    resetCompat: function () { compatMode = false; jsonModeMemo = {}; }
   };
 })(window.WW);

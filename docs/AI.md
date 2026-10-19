@@ -40,7 +40,7 @@
 | 本地 Ollama | OpenAI 兼容 | `http://localhost:11434/v1` | `qwen2.5:14b`（无需 Key） |
 | 本地 LM Studio | OpenAI 兼容 | `http://localhost:1234/v1` | 填 LM Studio 中已加载模型的标识（无需 Key） |
 
-> LM Studio：需要先在 Developer 页启动本地服务器，并在服务器设置里打开 **Enable CORS**（或者勾选本地代理走 `tools/serve.py`）。它的 JSON 模式只接受 `json_schema`，发 `json_object` 会返回 400，客户端会自动去掉 `response_format` 重发，不影响使用。
+> LM Studio：需要先在 Developer 页启动本地服务器，并在服务器设置里打开 **Enable CORS**（或者勾选本地代理走 `tools/serve.py`）。它的 JSON 模式只接受 `json_schema`，所以这个预设直接发严格 JSON Schema（和 Claude 的结构化输出用同一份 schema），由 LM Studio 按语法约束生成，输出一定是合法 JSON。
 
 ---
 
@@ -54,12 +54,12 @@ flowchart LR
   A1 --> A2["system 块开启 prompt caching<br/>output_config.effort 按任务<br/>output_config.format 严格 JSON Schema<br/>不传 temperature"]
   A2 --> A3["官方地址：beta server-side-fallback + fallbacks: default"]
   F -- OpenAI 兼容 --> O["fetch {base}/chat/completions<br/>Authorization: Bearer"]
-  O --> O1["JSON 任务：response_format json_object<br/>（400 时自动去掉重试）"]
+  O --> O1["JSON 任务：response_format<br/>json_schema / json_object / 不带<br/>（400 时逐级降级，并记住可用的那一种）"]
   O1 --> O2["流式：SSE data: 行，[DONE] 结束"]
 ```
 
 - **Anthropic**：浏览器直连需要的 `anthropic-dangerous-direct-browser-access` 头由 SDK 自动加上。按任务设置 `effort`：筛帖、网评、水军、控评、软文、自定义道具等用 `low`；公文补全/润色/评审、铁拳判定、结案报告、编辑器分区补全用 `medium`；编辑器一句话生成关卡用 `high`。`stop_reason` 为 `refusal` 或 JSON 任务被 `max_tokens` 截断时视为失败，回退离线。如果中转服务不认 `output_config`/`effort`/`fallbacks` 等参数（返回 400），会自动切换到兼容模式重发。
-- **OpenAI 兼容**：系统提示词末尾会附上 JSON 结构说明（因为这类接口不强制结构）；`max_tokens` 上限 8000。
+- **OpenAI 兼容**：系统提示词末尾会附上 JSON 结构说明；`max_tokens` 上限 8000。开启「JSON 模式」时按顺序尝试三种 `response_format`：预设声明支持 schema 的（目前是 LM Studio）先发 `json_schema`（严格 JSON Schema），其余先发 `json_object`；接口返回 400 就换下一种，最后不带 `response_format`。成功的那一种按“接口地址 + 模型”记在内存里，之后的请求直接用它，不再先吃一次 400；改动设置后会重新探测。
 
 ---
 

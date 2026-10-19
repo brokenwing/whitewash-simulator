@@ -202,7 +202,7 @@ sequenceDiagram
 | 适配器 | 用于 | 要点 |
 |---|---|---|
 | Anthropic | Claude 官方 / Anthropic 格式中转 | 官方 `@anthropic-ai/sdk`（CDN 按需 `import()`，钉死 0.131.0，`dangerouslyAllowBrowser`）；`output_config.effort` 按任务设定；JSON 任务用 `output_config.format`（严格 JSON Schema）；system 块开启 prompt caching；官方地址默认开启服务端拒答回退；中转不认这些参数时自动降级重试 |
-| OpenAI 兼容 | DeepSeek、通义、Kimi、智谱、豆包、硅基流动、OpenRouter、Ollama…… | `POST {base}/chat/completions`；JSON 任务带 `response_format: json_object`（不支持时自动去掉重试）；SSE 流式解析 |
+| OpenAI 兼容 | DeepSeek、通义、Kimi、智谱、豆包、硅基流动、OpenRouter、Ollama…… | `POST {base}/chat/completions`；JSON 任务带 `response_format`（LM Studio 等支持 schema 的用 `json_schema`，其余用 `json_object`；400 时逐级降级到不带，并按接口地址 + 模型记住可用的那一种）；SSE 流式解析 |
 
 详细的任务清单与 JSON 协议见 [AI.md](AI.md)。
 
