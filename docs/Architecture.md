@@ -310,7 +310,7 @@ flowchart LR
 - 帖子、关卡文本、AI 输出全部以 `textContent` / 文本节点渲染，没有 `innerHTML`，防止 XSS。
 - 自定义关卡只解析 JSON，不执行代码。
 - API Key 只存在本机浏览器，只发给你填写的接口地址；AI 调用日志不记录 Key。
-- `tools/serve.py` 只监听 `127.0.0.1`，只接受同源页面或 `file://` 页面（`Origin: null`）的转发请求，其他网站的请求一律 403，上游只允许 http/https。
+- `tools/serve.py` 只监听 `127.0.0.1`，校验 Host 头（只认 `127.0.0.1:<端口>` / `localhost:<端口>`）；转发只接受 POST，且 Origin 必须是本服务页面，`file://` 页面和沙箱 iframe（`Origin: null`）及其他网站一律 403；以 `.` 开头的路径不对外提供；上游只允许 http/https。
 
 ---
 

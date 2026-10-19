@@ -10,8 +10,11 @@
       会被原样转发到 <上游BaseURL>/<路径>，响应（含 SSE 流）原样回传，并附带 CORS 头。
       游戏里在「AI 设置」勾选“通过本地代理转发请求”即可。
 
-安全：只接受来自本服务页面（同源）或 file:// 页面（Origin: null）的转发请求，
-      其他网站发来的请求一律拒绝，避免本机被当成开放代理。
+安全：
+  - Host 头必须是 127.0.0.1:<端口> 或 localhost:<端口>，防 DNS 重绑定；
+  - 转发只接受 POST，且必须带白名单内的 Origin（即本服务页面）。file:// 页面、沙箱 iframe
+    （Origin: null）和其他网站一律拒绝，避免本机被当成开放代理；
+  - 任何以 . 开头的路径段（.git、.claude……）都不对外提供。
 """
 import argparse
 import base64
@@ -43,6 +46,7 @@ def b64url_decode(text):
 class Handler(http.server.SimpleHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
     allowed_origins = set()
+    allowed_hosts = set()
 
     extensions_map = dict(http.server.SimpleHTTPRequestHandler.extensions_map)
     extensions_map.update({".js": "text/javascript; charset=utf-8", ".json": "application/json; charset=utf-8",
@@ -59,27 +63,45 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self.send_header("Cache-Control", "no-store")
         super().end_headers()
 
-    # ------------------------------------------------------------------ CORS
-    def origin_ok(self):
-        origin = self.headers.get("Origin")
-        if origin is None:
-            return True  # same-origin GET/POST may omit Origin
-        if origin == "null":
-            return True  # page opened from file://
-        return origin in self.allowed_origins
+    # ------------------------------------------------------------------ guards
+    def host_ok(self):
+        host = (self.headers.get("Host") or "").lower()
+        if host in self.allowed_hosts:
+            return True
+        self.send_error(403, "host not allowed")
+        return False
 
+    def origin_ok(self):
+        # Browsers always send Origin on cross-origin and same-origin POST/preflight requests;
+        # a missing or "null" Origin is not one of our pages.
+        if self.headers.get("Origin") in self.allowed_origins:
+            return True
+        self.send_error(403, "origin not allowed: %s" % self.headers.get("Origin"))
+        return False
+
+    def path_ok(self):
+        path = urllib.parse.unquote(urllib.parse.urlsplit(self.path).path)
+        if any(part.startswith(".") for part in path.replace("\\", "/").split("/")):
+            self.send_error(404, "not found")
+            return False
+        return True
+
+    # ------------------------------------------------------------------ CORS
     def cors_headers(self):
-        origin = self.headers.get("Origin") or "*"
-        self.send_header("Access-Control-Allow-Origin", origin)
-        self.send_header("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
+        self.send_header("Access-Control-Allow-Origin", self.headers["Origin"])
+        self.send_header("Access-Control-Allow-Methods", "POST, OPTIONS")
         requested = self.headers.get("Access-Control-Request-Headers")
         self.send_header("Access-Control-Allow-Headers", requested or "*")
         self.send_header("Access-Control-Max-Age", "600")
         self.send_header("Vary", "Origin")
 
     def do_OPTIONS(self):
-        if not self.path.startswith(PROXY_PREFIX) or not self.origin_ok():
-            self.send_error(403, "forbidden")
+        if not self.host_ok():
+            return
+        if not self.path.startswith(PROXY_PREFIX):
+            self.send_error(405, "method not allowed")
+            return
+        if not self.origin_ok():
             return
         self.send_response(204)
         self.cors_headers()
@@ -88,16 +110,32 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
     # ------------------------------------------------------------------ proxy
     def do_POST(self):
+        if not self.host_ok():
+            return
         if not self.path.startswith(PROXY_PREFIX):
             self.send_error(405, "only the LLM proxy accepts POST")
+            return
+        if not self.origin_ok():
             return
         self.proxy("POST")
 
     def do_GET(self):
-        if self.path.startswith(PROXY_PREFIX):
-            self.proxy("GET")
+        if not self.host_ok():
             return
-        super().do_GET()
+        if self.path.startswith(PROXY_PREFIX):
+            self.send_error(405, "the LLM proxy only accepts POST")
+            return
+        if self.path_ok():
+            super().do_GET()
+
+    def do_HEAD(self):
+        if not self.host_ok():
+            return
+        if self.path.startswith(PROXY_PREFIX):
+            self.send_error(405, "the LLM proxy only accepts POST")
+            return
+        if self.path_ok():
+            super().do_HEAD()
 
     def target_url(self):
         rest = self.path[len(PROXY_PREFIX):]
@@ -109,9 +147,6 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         return base + "/" + tail
 
     def proxy(self, method):
-        if not self.origin_ok():
-            self.send_error(403, "origin not allowed: %s" % self.headers.get("Origin"))
-            return
         try:
             url = self.target_url()
         except Exception as exc:  # malformed prefix or scheme
@@ -167,7 +202,8 @@ def main():
     parser = argparse.ArgumentParser(description="公关洗地模拟器：本地静态服务 + LLM 跨域转发")
     parser.add_argument("--port", type=int, default=8765)
     args = parser.parse_args()
-    Handler.allowed_origins = {"http://127.0.0.1:%d" % args.port, "http://localhost:%d" % args.port}
+    Handler.allowed_hosts = {"127.0.0.1:%d" % args.port, "localhost:%d" % args.port}
+    Handler.allowed_origins = {"http://" + host for host in Handler.allowed_hosts}
     httpd = Server(("127.0.0.1", args.port), Handler)
     print("公关洗地模拟器已启动：http://127.0.0.1:%d/Start.html" % args.port)
     print("关卡编辑器：http://127.0.0.1:%d/LevelEditor.html" % args.port)
