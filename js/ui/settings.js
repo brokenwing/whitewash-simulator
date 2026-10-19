@@ -51,7 +51,7 @@
       WW.DOM.replace(modelList, (p.models || []).map(function (m) { return h('option', { value: m }); }));
       if (applyDefaults) {
         if (p.baseURL !== undefined) baseInput.value = p.baseURL;
-        if (p.models && p.models.length) modelInput.value = p.models[0];
+        if (p.models) modelInput.value = p.models[0] || '';
       }
       keyHint.textContent = p.keyHint ? 'Key 格式：' + p.keyHint : '';
       var isAnthropic = p.format === 'anthropic';
@@ -87,7 +87,7 @@
       title: 'AI 接口设置',
       wide: true,
       body: h('div', { class: 'col', style: { gap: '12px' } },
-        h('div', { class: 'small sub' }, '游戏可以接入 Claude（Anthropic）或任何 OpenAI 兼容接口（DeepSeek、通义、Kimi、智谱、豆包、Ollama…）。不配置也能玩：所有 AI 内容都有离线规则兜底。'),
+        h('div', { class: 'small sub' }, '游戏可以接入 Claude（Anthropic）或任何 OpenAI 兼容接口（DeepSeek、通义、Kimi、智谱、豆包、Gemini、Ollama、LM Studio…）。不配置也能玩：所有 AI 内容都有离线规则兜底。'),
         h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '12px' } },
           field('服务商', presetSel),
           field('模型', h('div', null, modelInput, modelList), 'Claude 默认 claude-opus-5-5；想更快更省可选 claude-haiku-5-5'),

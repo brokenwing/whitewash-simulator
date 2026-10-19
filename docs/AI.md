@@ -36,7 +36,11 @@
 | 豆包（火山方舟） | OpenAI 兼容 | `https://ark.cn-beijing.volces.com/api/v3` | 填推理接入点 ID |
 | 硅基流动 | OpenAI 兼容 | `https://api.siliconflow.cn/v1` | `deepseek-ai/DeepSeek-V3` |
 | OpenRouter | OpenAI 兼容 | `https://openrouter.ai/api/v1` | `deepseek/deepseek-chat` |
+| Google Gemini | OpenAI 兼容 | `https://generativelanguage.googleapis.com/v1beta/openai` | `gemini-2.5-flash` / `gemini-2.5-pro`（Key 在 Google AI Studio 获取） |
 | 本地 Ollama | OpenAI 兼容 | `http://localhost:11434/v1` | `qwen2.5:14b`（无需 Key） |
+| 本地 LM Studio | OpenAI 兼容 | `http://localhost:1234/v1` | 填 LM Studio 中已加载模型的标识（无需 Key） |
+
+> LM Studio：需要先在 Developer 页启动本地服务器，并在服务器设置里打开 **Enable CORS**（或者勾选本地代理走 `tools/serve.py`）。它的 JSON 模式只接受 `json_schema`，发 `json_object` 会返回 400，客户端会自动去掉 `response_format` 重发，不影响使用。
 
 ---
 
