@@ -5,6 +5,7 @@
 用法：
     python tools/serve.py              # http://127.0.0.1:8765/Start.html
     python tools/serve.py --port 9000
+    python tools/serve.py --open       # 启动后自动用默认浏览器打开游戏
 
 转发：浏览器请求  http://127.0.0.1:8765/llm-proxy/<base64url(上游BaseURL)>/<路径>
       会被原样转发到 <上游BaseURL>/<路径>，响应（含 SSE 流）原样回传，并附带 CORS 头。
@@ -20,11 +21,14 @@ import argparse
 import base64
 import http.server
 import os
+import socket
 import socketserver
 import sys
+import threading
 import urllib.error
 import urllib.parse
 import urllib.request
+import webbrowser
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PROXY_PREFIX = "/llm-proxy/"
@@ -195,20 +199,34 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
 class Server(socketserver.ThreadingMixIn, http.server.HTTPServer):
     daemon_threads = True
-    allow_reuse_address = True
+    # On Windows SO_REUSEADDR lets a second process bind the same port; claim it exclusively instead.
+    allow_reuse_address = os.name != "nt"
+
+    def server_bind(self):
+        if os.name == "nt" and hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        super().server_bind()
 
 
 def main():
     parser = argparse.ArgumentParser(description="公关洗地模拟器：本地静态服务 + LLM 跨域转发")
     parser.add_argument("--port", type=int, default=8765)
+    parser.add_argument("--open", action="store_true", help="启动后用默认浏览器打开游戏")
     args = parser.parse_args()
     Handler.allowed_hosts = {"127.0.0.1:%d" % args.port, "localhost:%d" % args.port}
     Handler.allowed_origins = {"http://" + host for host in Handler.allowed_hosts}
-    httpd = Server(("127.0.0.1", args.port), Handler)
-    print("公关洗地模拟器已启动：http://127.0.0.1:%d/Start.html" % args.port)
+    try:
+        httpd = Server(("127.0.0.1", args.port), Handler)
+    except OSError as exc:
+        print("无法监听 127.0.0.1:%d（%s）。端口可能已被占用，可以换一个端口：--port 9000" % (args.port, exc))
+        sys.exit(1)
+    start_url = "http://127.0.0.1:%d/Start.html" % args.port
+    print("公关洗地模拟器已启动：%s" % start_url)
     print("关卡编辑器：http://127.0.0.1:%d/LevelEditor.html" % args.port)
     print("LLM 转发前缀：http://127.0.0.1:%d%s<base64url(BaseURL)>/..." % (args.port, PROXY_PREFIX))
     print("按 Ctrl+C 退出。")
+    if args.open:
+        threading.Timer(0.5, webbrowser.open, args=(start_url,)).start()
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:

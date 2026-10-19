@@ -20,13 +20,18 @@
 
 ## 快速开始
 
-推荐用自带的本地服务启动（只用 Python 标准库）：
+推荐用自带的本地服务启动（只用 Python 3 标准库），启动脚本会自动打开浏览器：
+
+- **Windows**：双击 `start.bat`
+- **Linux / macOS**：在终端运行 `./start.sh`
+
+两个脚本都可以带一个端口参数（默认 8765），例如 `start.bat 9000`。也可以手动启动：
 
 ```bash
-python tools/serve.py
+python tools/serve.py --open
 ```
 
-然后打开 <http://127.0.0.1:8765/Start.html>。关卡编辑器在 <http://127.0.0.1:8765/LevelEditor.html>。
+游戏地址是 <http://127.0.0.1:8765/Start.html>，关卡编辑器在 <http://127.0.0.1:8765/LevelEditor.html>。
 
 也可以直接双击 `Start.html` 离线游玩（所有脚本都是普通 `<script>`，不需要服务器）。需要接入 AI、或者想让游戏和编辑器共享设置与自定义关卡时，建议用上面的本地服务。
 
@@ -66,6 +71,7 @@ js/llm/               AI：设置与适配器、任务提示词、输出结构�
 js/ui/                游戏界面
 js/editor/            编辑器
 levels/               内置关卡（manifest.js + 每关一个文件）
+start.bat / start.sh  一键启动（Windows / Linux、macOS）
 tools/serve.py        本地静态服务 + LLM 跨域转发
 tests/run.js          单元测试与自动平衡模拟
 docs/                 文档
