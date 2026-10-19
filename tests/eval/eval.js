@@ -221,7 +221,7 @@ async function e2e(WW, caller, levelId, seed) {
   }
   const run = { name: runName, subject, backend, at: new Date().toISOString(), cases: list.length, repeat, results };
   /* one file per model, so several models can share a run directory (and its judge answers) */
-  fs.writeFileSync(path.join(runDir, 'run-' + subject + '.json'), JSON.stringify(run, null, 1));
+  fs.writeFileSync(path.join(runDir, 'run-' + report.fileTag(subject) + '.json'), JSON.stringify(run, null, 1));
   const prev = val('--compare') ? JSON.parse(fs.readFileSync(path.resolve(val('--compare')), 'utf8')) : null;
   const md = report.write(run, runDir, cases.all(), prev);
   const pending = results.filter((r) => r.status === 'pending').length;

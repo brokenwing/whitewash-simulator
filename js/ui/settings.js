@@ -39,6 +39,9 @@
     var proxyURL = h('input', { class: 'input', value: s.proxyURL });
     var timeout = h('input', { class: 'input', type: 'number', min: 10, max: 600, value: s.timeoutSec });
     var temperature = h('input', { class: 'input', type: 'number', min: 0, max: 2, step: 0.1, value: s.temperature });
+    var reasoning = h('select', { class: 'input' }, [['auto', '自动（按任务，写作类不思考）'], ['none', '关闭'], ['low', '低'], ['medium', '中'], ['high', '高']].map(function (o) {
+      return h('option', { value: o[0], selected: (s.reasoning || 'auto') === o[0] }, o[1]);
+    }));
     var theme = h('select', { class: 'input' },
       h('option', { value: 'dark', selected: WW.Store.get('theme', 'dark') === 'dark' }, '深色作战室'),
       h('option', { value: 'light', selected: WW.Store.get('theme', 'dark') === 'light' }, '浅色'),
@@ -51,7 +54,8 @@
       h('label', { class: 'check' }, fallbacks, '拒答时服务端自动回退（仅官方地址生效）'));
     var openaiOnly = h('div', { class: 'col' },
       h('label', { class: 'check' }, jsonMode, 'JSON 模式（response_format：json_schema / json_object；服务商不支持会自动降级）'),
-      field('Temperature', temperature));
+      field('Temperature', temperature),
+      field('思考强度', reasoning, '只对支持的预设生效（LM Studio、Gemini）。思考越多越慢，思考 token 也占输出额度。'));
 
     var syncPreset = function (applyDefaults) {
       var p = WW.LLM.preset(presetSel.value) || {};
@@ -120,7 +124,7 @@
       var p = WW.LLM.preset(presetSel.value) || {};
       return {
         provider: presetSel.value, format: p.format || 'openai', baseURL: baseInput.value.trim(), model: modelInput.value.trim(),
-        keyMode: keyMode.value, serverKeyOrigin: WW.LLM.getSettings().serverKeyOrigin, serverKeyHint: WW.LLM.getSettings().serverKeyHint, aiLevel: aiLevel.value, structured: structured.checked, jsonMode: jsonMode.checked,
+        keyMode: keyMode.value, serverKeyOrigin: WW.LLM.getSettings().serverKeyOrigin, serverKeyHint: WW.LLM.getSettings().serverKeyHint, aiLevel: aiLevel.value, structured: structured.checked, jsonMode: jsonMode.checked, reasoning: reasoning.value,
         fallbacks: fallbacks.checked, streaming: streaming.checked, useProxy: useProxy.checked, proxyURL: proxyURL.value.trim(),
         timeoutSec: Number(timeout.value) || 120, temperature: Number(temperature.value), sdkURL: s.sdkURL || WW.LLM.SDK_URL
       };

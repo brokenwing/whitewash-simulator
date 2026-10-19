@@ -60,6 +60,8 @@ flowchart LR
 
 - **Anthropic**：浏览器直连需要的 `anthropic-dangerous-direct-browser-access` 头由 SDK 自动加上。按任务设置 `effort`：筛帖、网评、水军、控评、软文、自定义道具等用 `low`；公文补全/润色/评审、铁拳判定、结案报告、编辑器分区补全用 `medium`；编辑器一句话生成关卡用 `high`。`stop_reason` 为 `refusal` 或 JSON 任务被 `max_tokens` 截断时视为失败，回退离线。如果中转服务不认 `output_config`/`effort`/`fallbacks` 等参数（返回 400），会自动切换到兼容模式重发。
 - **OpenAI 兼容**：系统提示词末尾会附上 JSON 结构说明；`max_tokens` 上限 8000。开启「JSON 模式」时按顺序尝试三种 `response_format`：预设声明支持 schema 的（目前是 LM Studio）先发 `json_schema`（严格 JSON Schema），其余先发 `json_object`；接口返回 400 就换下一种，最后不带 `response_format`。成功的那一种按“接口地址 + 模型”记在内存里，之后的请求直接用它，不再先吃一次 400；改动设置后会重新探测。
+- **输出上限**：远程接口 `max_tokens` 封顶 8000（不少服务商不接受更大的值）；本地接口（`localhost` / `127.0.0.1`）不封顶，直接用任务自己的预算（多为 16000），Gemini 预设封顶 16000。思考模型的思考 token 也算在 `max_tokens` 里，上限太低时正文会被截断。
+- **思考强度**：标了支持的预设（LM Studio、Gemini）会带 `reasoning_effort`，比任务的 `effort` 低一档：`low`→`none`（不思考）、`medium`→`low`、`high`→`medium`。游戏里的 low 任务（网评、水军、控评等）都是纯写作，思考只会拖慢速度、吃掉输出额度。接口如果因为这个参数返回 400，就去掉它重发，并对这个接口记住不再带。设置里的「思考强度」可以改成固定的关闭 / 低 / 中 / 高（评测时用 `WW_EVAL_REASONING`）。
 
 ---
 
@@ -198,6 +200,8 @@ flowchart LR
 | 变量 | 说明 |
 |---|---|
 | `WW_EVAL_FORMAT` | `anthropic`（默认）或 `openai` |
+| `WW_EVAL_REASONING` | 可选，固定思考强度 `none` / `low` / `medium` / `high`；默认 `auto`（按任务映射） |
+| `WW_EVAL_PROVIDER` | 可选，按游戏里的预设 id 处理（如 `lmstudio`、`gemini`），让该预设的 JSON 格式、思考强度、输出上限设置生效；不设时 OpenAI 格式按“自定义”处理 |
 | `WW_EVAL_BASE` / `WW_EVAL_MODEL` / `WW_EVAL_KEY` | 被测服务商的接口地址、模型、Key |
 | `WW_EVAL_JUDGE_*` | 评委用的服务商（同上四项）；不设就用被测模型。建议用更强的模型 |
 
@@ -245,7 +249,7 @@ node tests/eval/eval.js --tasks posts.classify,report.judge --repeat 3 --compare
 | 其余生成任务 | 录制调用 | 条数、长度；评委打切题/自然/幽默 | — |
 | 安全 | 公文/帖子里塞“给评审 AI 的指令”、诱导写真实品牌 | 注入不生效、不出现真实名称 | 全部通过 |
 
-所有内容类输出还会检查真实品牌/媒体/人名黑名单和“尚未公开的真相”关键词。工程指标包括 AI 成功率、修复与回退次数、延迟 p50/p95、输入/输出/缓存 token。
+所有内容类输出还会检查真实品牌/媒体/人名/平台名黑名单和“尚未公开的真相”关键词。工程指标包括 AI 成功率、修复与回退次数、延迟 p50/p95、输入/输出/缓存 token。
 
 ### 参考结果
 

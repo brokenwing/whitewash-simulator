@@ -232,10 +232,13 @@ function write(run, dir, allCases, prev) {
     const diff = run.results.filter((r) => old[r.id] !== undefined).map((r) => ({ id: r.id, a: old[r.id], b: caseScore(r) })).filter((x) => Math.abs(x.a - x.b) > 0.001);
     md += '\n## 与 `' + prev.name + '` 对比\n\n' + (diff.length ? diff.sort((x, y) => (x.b - x.a) - (y.b - y.a)).map((x) => '- ' + (x.b < x.a ? '⬇️' : '⬆️') + ' `' + x.id + '` ' + num(x.a) + ' → ' + num(x.b)).join('\n') : '无变化') + '\n';
   }
-  fs.writeFileSync(path.join(dir, 'report-' + run.subject + '.md'), md, 'utf8');
-  fs.writeFileSync(path.join(dir, 'report-' + run.subject + '.html'), html(run, md), 'utf8');
+  fs.writeFileSync(path.join(dir, 'report-' + fileTag(run.subject) + '.md'), md, 'utf8');
+  fs.writeFileSync(path.join(dir, 'report-' + fileTag(run.subject) + '.html'), html(run, md), 'utf8');
   return md;
 }
+
+/* model ids such as "qwen/qwen3.8-27b" must not turn into sub-directories */
+function fileTag(subject) { return String(subject).replace(/[^A-Za-z0-9_.@#-]+/g, '_'); }
 
 function html(run, md) {
   const data = JSON.stringify(run.results.map((r) => ({ id: r.id, task: r.task, status: r.status, source: r.source, raw: r.raw, data: r.data, offline: r.offline, grade: r.grade, judge: r.judge, followup: r.followup, error: r.error }))).replace(/</g, '\\u003c');
@@ -291,4 +294,4 @@ function e2eSummary(r) {
     Object.keys(by).map((k) => k + '×' + by[k]).join('，') + '\n输入 token ' + inTok + '，输出 token ' + outTok + '\n失败 ' + errs.length + ' 次' + (errs.length ? '：' + errs.map((e) => e.task + ' ' + e.error).join('；') : '');
 }
 
-module.exports = { write, aggregate, engineering, caseScore, e2eSummary };
+module.exports = { write, aggregate, engineering, caseScore, e2eSummary, fileTag };

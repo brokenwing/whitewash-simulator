@@ -27,9 +27,9 @@
     { id: 'doubao', name: '豆包（火山方舟）', format: 'openai', baseURL: 'https://ark.cn-beijing.volces.com/api/v3', models: [], keyHint: '模型处填推理接入点 ID' },
     { id: 'siliconflow', name: '硅基流动', format: 'openai', baseURL: 'https://api.siliconflow.cn/v1', models: ['deepseek-ai/DeepSeek-V3', 'Qwen/Qwen2.5-72B-Instruct'], keyHint: 'sk-…' },
     { id: 'openrouter', name: 'OpenRouter', format: 'openai', baseURL: 'https://openrouter.ai/api/v1', models: ['deepseek/deepseek-chat', 'qwen/qwen-2.5-72b-instruct'], keyHint: 'sk-or-…' },
-    { id: 'gemini', name: 'Google Gemini', format: 'openai', baseURL: 'https://generativelanguage.googleapis.com/v1beta/openai', models: ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.5-flash-lite'], keyHint: 'AIza…（Google AI Studio 获取）' },
+    { id: 'gemini', name: 'Google Gemini', format: 'openai', baseURL: 'https://generativelanguage.googleapis.com/v1beta/openai', models: ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.5-flash-lite'], keyHint: 'AIza…（Google AI Studio 获取）', reasoning: true, maxOutput: 16000 },
     { id: 'ollama', name: '本地 Ollama', format: 'openai', baseURL: 'http://localhost:11434/v1', models: ['qwen2.5:14b', 'qwen2.5:7b'], keyHint: '无需 Key', noKey: true },
-    { id: 'lmstudio', name: '本地 LM Studio', format: 'openai', baseURL: 'http://localhost:1234/v1', models: [], keyHint: '无需 Key；模型处填 LM Studio 中已加载模型的标识，并在服务器设置里开启 CORS', noKey: true, jsonFormat: 'json_schema' },
+    { id: 'lmstudio', name: '本地 LM Studio', format: 'openai', baseURL: 'http://localhost:1234/v1', models: [], keyHint: '无需 Key；模型处填 LM Studio 中已加载模型的标识，并在服务器设置里开启 CORS', noKey: true, jsonFormat: 'json_schema', reasoning: true },
     { id: 'custom', name: '自定义（OpenAI 兼容）', format: 'openai', baseURL: '', models: [], keyHint: '' }
   ];
 
@@ -40,7 +40,7 @@
 
   var DEFAULTS = {
     provider: 'anthropic', format: 'anthropic', baseURL: 'https://api.anthropic.com', model: 'claude-opus-5-5',
-    keyMode: serverAvailable() ? 'server' : 'local', serverKeyOrigin: '', serverKeyHint: '', aiLevel: 'full', jsonMode: true, structured: true, temperature: 0.9, timeoutSec: 120,
+    keyMode: serverAvailable() ? 'server' : 'local', serverKeyOrigin: '', serverKeyHint: '', aiLevel: 'full', jsonMode: true, reasoning: 'auto', structured: true, temperature: 0.9, timeoutSec: 120,
     useProxy: false, proxyURL: 'http://127.0.0.1:8765', fallbacks: true, sdkURL: SDK_URL, streaming: true
   };
 
@@ -323,6 +323,20 @@
     return [first].concat(['json_schema', 'json_object'].filter(function (m) { return m !== first; })).concat(['none']);
   }
 
+  /* Task effort -> OpenAI-style reasoning_effort, one notch lower: hidden reasoning tokens count against
+     max_tokens and add latency, and the game's low-effort tasks are pure writing. Only sent for presets
+     with `reasoning: true`; a 400 about it drops the parameter for that endpoint. */
+  var REASONING_EFFORT = { low: 'none', medium: 'low', high: 'medium' };
+  var noReasoningMemo = {};
+
+  /* Remote APIs keep the conservative 8000 cap (several reject more); local servers and presets with
+     maxOutput get the task's own budget, since thinking models spend part of it before answering. */
+  function outputCap(s) {
+    var p = preset(s.provider);
+    if (p && p.maxOutput) return p.maxOutput;
+    return /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:|\/|$)/i.test(s.baseURL || '') ? Infinity : 8000;
+  }
+
   function openaiChat(s, key, o) {
     var url = effectiveBase(s) + '/chat/completions';
     var sys = o.system + (o.shape ? '\n\n【输出格式】只输出一个 JSON 对象，结构为：' + WW.Shape.describe(o.shape) : '');
@@ -330,10 +344,15 @@
       model: s.model,
       messages: [{ role: 'system', content: sys }, { role: 'user', content: o.user }],
       temperature: Number(s.temperature),
-      max_tokens: Math.min(o.maxTokens || 4096, 8000)
+      max_tokens: Math.min(o.maxTokens || 4096, outputCap(s))
     };
-    var modes = o.shape && s.jsonMode ? jsonModes(s) : ['none'];
     var memoKey = s.baseURL + '|' + s.model;
+    var pr = preset(s.provider);
+    /* s.reasoning: 'auto' = the task mapping above; 'none' | 'low' | 'medium' | 'high' = fixed for every task */
+    if (pr && pr.reasoning && !noReasoningMemo[memoKey]) {
+      body.reasoning_effort = s.reasoning && s.reasoning !== 'auto' ? s.reasoning : (REASONING_EFFORT[o.effort || 'low'] || 'none');
+    }
+    var modes = o.shape && s.jsonMode ? jsonModes(s) : ['none'];
     var mi = Math.min(jsonModeMemo[memoKey] || 0, modes.length - 1);
     var applyMode = function () {
       if (modes[mi] === 'json_schema') body.response_format = { type: 'json_schema', json_schema: { name: 'output', strict: true, schema: WW.Shape.toJSONSchema(o.shape) } };
@@ -359,17 +378,27 @@
         return retry();
       });
     };
-    /* a 400 while a JSON mode is set: step down json_schema -> json_object -> none; remember the
-       mode that worked for this endpoint so later calls skip the rejected ones */
+    /* a 400 while optional parameters are set: drop reasoning_effort if the error is about it, else step
+       the JSON mode down json_schema -> json_object -> none; remember what worked for this endpoint so
+       later calls skip the rejected variants */
     var sendWithMode = function () {
       return send().then(function (res) {
-        if (res.status === 400 && body.response_format && mi < modes.length - 1) {
-          mi++;
-          applyMode();
-          return sendWithMode();
-        }
         if (res.ok) jsonModeMemo[memoKey] = mi;
-        return res;
+        if (res.status !== 400 || !(body.response_format || body.reasoning_effort)) return res;
+        return res.clone().text().then(function (t) {
+          var canStep = body.response_format && mi < modes.length - 1;
+          if (body.reasoning_effort && (/reason/i.test(t) || !canStep)) {
+            delete body.reasoning_effort;
+            noReasoningMemo[memoKey] = true;
+            return sendWithMode();
+          }
+          if (canStep) {
+            mi++;
+            applyMode();
+            return sendWithMode();
+          }
+          return res;
+        });
       });
     };
     return sendWithMode().then(function (res) {
@@ -460,6 +489,6 @@
     test: test,
     logs: logs,
     onSettings: function (fn) { listeners.push(fn); },
-    resetCompat: function () { compatMode = false; jsonModeMemo = {}; }
+    resetCompat: function () { compatMode = false; jsonModeMemo = {}; noReasoningMemo = {}; }
   };
 })(window.WW);

@@ -38,7 +38,8 @@ function envSettings(prefix) {
   const format = env('FORMAT') || 'anthropic';
   return {
     format,
-    provider: format === 'anthropic' ? (/api\.anthropic\.com/.test(env('BASE') || 'https://api.anthropic.com') ? 'anthropic' : 'anthropic-relay') : 'custom',
+    /* PROVIDER picks a preset (e.g. lmstudio, gemini) so its JSON format / reasoning / output-cap flags apply */
+    provider: env('PROVIDER') || (format === 'anthropic' ? (/api\.anthropic\.com/.test(env('BASE') || 'https://api.anthropic.com') ? 'anthropic' : 'anthropic-relay') : 'custom'),
     baseURL: env('BASE') || (format === 'anthropic' ? 'https://api.anthropic.com' : ''),
     model: env('MODEL') || (format === 'anthropic' ? 'claude-opus-5-5' : ''),
     key: env('KEY') || ''
@@ -60,7 +61,8 @@ function makeContext(settings) {
   const WW = ctx.WW;
   const s = Object.assign({}, WW.LLM.DEFAULTS, {
     provider: settings.provider, format: settings.format, baseURL: settings.baseURL, model: settings.model,
-    aiLevel: 'full', streaming: false, timeoutSec: Number(process.env.WW_EVAL_TIMEOUT || 180), keyMode: 'local'
+    aiLevel: 'full', streaming: false, timeoutSec: Number(process.env.WW_EVAL_TIMEOUT || 180), keyMode: 'local',
+    reasoning: process.env.WW_EVAL_REASONING || 'auto'
   });
   const sdk = sdkFileURL();
   if (sdk) s.sdkURL = sdk;
