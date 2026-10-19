@@ -131,7 +131,8 @@
     };
     var itemName = function (id) {
       var c = level && level.items && (level.items.custom || []).filter(function (x) { return x.id === id; })[0];
-      return c ? c.name : (WW.Data.items[id] ? WW.Data.items[id].name : id);
+      var over = level && level.items && level.items.overrides && level.items.overrides[id];
+      return c ? c.name : over && over.name ? over.name : (WW.Data.items[id] ? WW.Data.items[id].name : id);
     };
     switch (e.type) {
       case 'stat': return (STAT_NAMES[e.stat] || e.stat) + ' ' + U.signed(e.delta);

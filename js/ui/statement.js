@@ -13,7 +13,8 @@
     ['blameShift', '甩锅', true], ['arrogance', '傲慢', true], ['evasiveness', '回避', true], ['memeRisk', '玩梗风险', true]
   ];
 
-  function open(ui, preset) {
+  /* guide (optional, from the tutorial coach): { hint, sample: { title, text } } */
+  function open(ui, preset, guide) {
     var game = ui.game;
     var st = game.state;
     var item = game.items.statement;
@@ -120,13 +121,22 @@
 
     var demands = game.level.client.demands;
     var facts = Object.keys(st.facts).map(function (id) { return st.facts[id]; }).filter(function (f) { return f.public || f.revealed; });
+    var sampleBtn = h('button', { class: 'btn', title: '用教程准备的示范稿替换当前正文', on: { click: function () {
+      if (busy) return;
+      if (guide.sample.title) { titleInput.value = guide.sample.title; titleInput.dataset.auto = '0'; }
+      text.value = guide.sample.text || '';
+      updateCount();
+      aiState.textContent = '已填入示范稿，可以照着改，也可以直接发布。';
+    } } }, '📋 填入示范稿');
+
     var side = h('div', { class: 'col', style: { gap: '10px' } },
+      WW.ItemUI.guideBanner(guide),
       h('div', { class: 'field' }, h('label', null, '公文类型'), typeSel, typeDesc),
       h('div', { class: 'field' }, h('label', null, '发布渠道'), chanSeg),
       h('div', { class: 'field' }, h('label', null, '语气'),
         h('div', { class: 'tone-row' }, h('span', null, '强硬'), sincere, h('span', { style: { textAlign: 'right' } }, '诚恳')),
         h('div', { class: 'tone-row' }, h('span', null, '甩锅'), admit, h('span', { style: { textAlign: 'right' } }, '认错'))),
-      h('div', { class: 'row wrap' }, completeBtn, polishBtn),
+      h('div', { class: 'row wrap' }, completeBtn, polishBtn, guide && guide.sample ? sampleBtn : null),
       aiState,
       demands.length ? h('div', { class: 'panel', style: { padding: '8px 10px' } },
         h('div', { class: 'label' }, '⚠ 客户红线'),

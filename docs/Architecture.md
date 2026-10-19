@@ -79,6 +79,7 @@ flowchart TB
 | `js/engine/truth.js` | 否认/承认、证据曝光、打脸、辟谣、承诺跳票、监管“铁拳” |
 | `js/engine/sim.js` | 回合演化：阵营漂移、热度衰减、扒水军、旧账爆雷、客户满意度；生成“发帖位” |
 | `js/engine/objectives.js` | 主任务阶段 / 子任务 / 支线 |
+| `js/engine/guide.js` | 教程引导：按条件推进步骤、当前步骤、帖子选择器（UI 的教程卡片与测试共用） |
 | `js/engine/opponents.js` | 对手盘：选招、意图、技能效果、专属事件 |
 | `js/engine/events.js` | 回合开局：证据、承诺、脚本事件、随机事件 |
 | `js/engine/scoring.js` | 结案评分与评级 |

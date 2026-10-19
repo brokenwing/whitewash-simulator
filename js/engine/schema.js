@@ -351,8 +351,22 @@
     });
     lv.defeat = defeats;
 
-    lv.guide = arr(lv.guide).map(function (g) {
-      return { turn: num(g.turn, 1), text: str(g.text, ''), target: str(g.target, ''), when: str(g.when, 'start') };
+    /* guide steps: see js/engine/guide.js. A tip with neither `done` nor `when` lasts one turn. */
+    lv.guide = arr(lv.guide).map(function (g, i) {
+      var when = U.isObj(g.when) || Array.isArray(g.when) ? g.when : null;
+      var done = U.isObj(g.done) || Array.isArray(g.done) ? g.done : null;
+      var turn = Math.max(1, num(g.turn, 1));
+      var action = U.isObj(g.action) && (g.action.item || g.action.cmd) ? {
+        item: str(g.action.item, ''), cmd: str(g.action.cmd, ''), task: str(g.action.task, ''), label: str(g.action.label, ''),
+        preset: U.isObj(g.action.preset) ? g.action.preset : {}
+      } : null;
+      return {
+        id: str(g.id, 'guide' + (i + 1)), turn: turn, title: str(g.title, ''), text: str(g.text, ''), target: str(g.target, ''),
+        when: when, done: done, skip: U.isObj(g.skip) || Array.isArray(g.skip) ? g.skip : null,
+        until: g.until !== undefined ? num(g.until, 0) : (done || when ? 0 : turn),
+        optional: !!g.optional, at: g.at === 'result' ? 'result' : 'play', action: action,
+        notes: arr(g.notes).filter(U.isObj).map(function (n) { return { when: n.when || null, text: str(n.text, '') }; })
+      };
     });
 
     if (!U.isObj(lv.offline)) lv.offline = {};
@@ -473,6 +487,15 @@
     lv.defeat.forEach(function (d, i) { WW.Cond.validate(d.condition, lv, 'defeat[' + i + '].condition', errors); });
     WW.Cond.validate(lv.victory.condition, lv, 'victory.condition', errors);
     lv.client.expectations.forEach(function (x, i) { WW.Cond.validate(x.condition, lv, 'client.expectations[' + i + '].condition', errors); });
+    dupCheck(lv.guide, 'guide', '教程步骤');
+    lv.guide.forEach(function (g, i) {
+      var p = 'guide[' + i + ']';
+      ['when', 'done', 'skip'].forEach(function (k) { WW.Cond.validate(g[k], lv, p + '.' + k, errors); });
+      g.notes.forEach(function (n, j) { WW.Cond.validate(n.when, lv, p + '.notes[' + j + '].when', errors); });
+      if (g.action && g.action.item && !lv.items.enabled.concat(lv.items.custom.map(function (c) { return c.id; })).some(function (id) { return id === g.action.item; })) {
+        W(p + '.action.item', '教程步骤引用的道具「' + g.action.item + '」本关没有启用');
+      }
+    });
 
     lv.facts.forEach(function (f, i) {
       if (!f.text) E('facts[' + i + '].text', '事实缺少描述');

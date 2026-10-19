@@ -40,6 +40,11 @@
     return WW.Feed.ranked(game.state, 'all').filter(function (p) { return p.status !== 'deleted' && (includeOwn || !p.isClient) && (!filter || filter(p)); }).slice(0, 25);
   }
 
+  /* guide: { hint } from the tutorial coach, shown above the form */
+  function guideBanner(guide) {
+    return guide && guide.hint ? h('div', { class: 'banner guide', style: { flexWrap: 'nowrap', alignItems: 'flex-start' } }, h('span', null, '📘'), h('span', { style: { flex: '1 1 0', minWidth: '0', whiteSpace: 'pre-line' } }, guide.hint)) : null;
+  }
+
   function header(item, status) {
     return h('div', { class: 'col', style: { gap: '4px' } },
       h('div', { class: 'small sub' }, item.desc || ''),
@@ -47,12 +52,12 @@
       h('div', { class: 'tiny muted' }, (WW.Data.tierNames[item.tier] || '') + '道具 · ' + item.ap + ' 行动点' + (item.cooldown ? ' · 冷却 ' + item.cooldown + ' 回合' : '') + (status.usesLeft !== null ? ' · 剩余 ' + status.usesLeft + ' 次' : '') + (status.voucher ? ' · 有免费券 ×' + status.voucher : '')));
   }
 
-  function open(ui, id, preset) {
+  function open(ui, id, preset, guide) {
     var game = ui.game;
     var item = game.items[id];
     if (!item) return;
     preset = preset || {};
-    if (item.handler === 'statement') return WW.StatementUI.open(ui, preset);
+    if (item.handler === 'statement') return WW.StatementUI.open(ui, preset, guide);
     var status = game.itemStatus(id, preset);
     if (!status.usable) { WW.DOM.toast('「' + item.name + '」' + status.reason, 'warn'); return; }
 
@@ -231,12 +236,12 @@
     var m = WW.DOM.modal({
       title: item.icon + ' ' + item.name,
       wide: item.handler === 'delete' || item.handler === 'throttle',
-      body: h('div', { class: 'col', style: { gap: '14px' } }, header(item, status), form, costLine),
+      body: h('div', { class: 'col', style: { gap: '14px' } }, guideBanner(guide), header(item, status), form, costLine),
       footer: [h('button', { class: 'btn', on: { click: function () { m.close(); } } }, '取消'), okBtn]
     });
     refreshCost();
     return m;
   }
 
-  WW.ItemUI = { open: open };
+  WW.ItemUI = { open: open, guideBanner: guideBanner };
 })(window.WW);

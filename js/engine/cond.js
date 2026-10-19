@@ -27,6 +27,7 @@
     { key: 'lieDebt', label: '谎言债' },
     { key: 'progress', label: '主任务推进度(0-1)' },
     { key: 'stage', label: '已完成阶段数' },
+    { key: 'result', label: '结局(win/lose，结案前为空)' },
     { key: 'posts.negative', label: '可见负面帖数' },
     { key: 'posts.positive', label: '可见正面帖数' },
     { key: 'posts.deleted', label: '累计删帖数' },
@@ -78,6 +79,7 @@
       case 'lieDebt': return st.lieDebt;
       case 'progress': return st.objectives ? st.objectives.progress : 0;
       case 'stage': return st.objectives ? st.objectives.stageIndex : 0;
+      case 'result': return st.result || '';
       case 'trend': return parts[1] === 'rank' ? st.trend.rank : undefined;
       case 'faction': {
         var f = st.factions[parts[1]];
@@ -196,6 +198,8 @@
   function itemName(id, level) {
     var custom = level && level.items && (level.items.custom || []).filter(function (x) { return x.id === id; })[0];
     if (custom) return custom.name;
+    var over = level && level.items && level.items.overrides && level.items.overrides[id];
+    if (over && over.name) return over.name;
     var lib = WW.Data.items && WW.Data.items[id];
     return lib ? lib.name : id;
   }

@@ -17,7 +17,7 @@ const FILES = [
   'js/data/platforms.js', 'js/data/factions.js', 'js/data/personas.js', 'js/data/pools.js', 'js/data/statements.js',
   'js/data/items.js', 'js/data/abilities.js', 'js/data/difficulty.js',
   'js/engine/cond.js', 'js/engine/effects.js', 'js/engine/schema.js', 'js/engine/feed.js', 'js/engine/items.js',
-  'js/engine/truth.js', 'js/engine/actions.js', 'js/engine/sim.js', 'js/engine/objectives.js', 'js/engine/opponents.js',
+  'js/engine/truth.js', 'js/engine/actions.js', 'js/engine/sim.js', 'js/engine/objectives.js', 'js/engine/guide.js', 'js/engine/opponents.js',
   'js/engine/events.js', 'js/engine/scoring.js', 'js/engine/engine.js', 'js/engine/levels.js',
   'js/llm/offline.js', 'js/llm/shape.js', 'js/llm/client.js', 'js/llm/prompts.js'
 ];
@@ -236,7 +236,50 @@ function createBots(WW) {
     return game;
   }
 
-  return { STRATEGIES, playBot, tryAct, finiteStats, statementText, smartStatement, topNegative, deleteSome, careful };
+  /* A newcomer who does exactly what the tutorial card says: reads tips, presses the card's action
+   * button (using the sample draft when one is offered) and ends the turn when the card has nothing
+   * to press. Returns the finished game. */
+  async function playGuide(level, seed, difficulty) {
+    const game = new WW.Engine.Game(level, { seed, difficulty });
+    const st = game.state;
+    let guard = 0;
+    while (!st.finished && guard++ < 40) {
+      let steps = 0;
+      while (!st.finished && steps++ < 20) {
+        const step = WW.Guide.sync(game).current;
+        if (!step) break;
+        if (!step.done) { WW.Guide.mark(game, step.id, 'ack'); continue; }
+        const a = step.action;
+        if (!a || a.cmd === 'endTurn') break;
+        if (a.cmd === 'finish') { game.finishEarly(); break; }
+        if (a.cmd === 'accept') { game.respondTask(a.task, true); continue; }
+        const params = Object.assign({}, a.preset);
+        const sample = params.sample;
+        delete params.hint;
+        delete params.sample;
+        if (params.post) {
+          const p = WW.Guide.findPost(game, params.post);
+          delete params.post;
+          if (p) params.postId = p.id;
+        }
+        if (game.items[a.item].handler === 'statement') {
+          params.channel = 'weibo';
+          params.text = sample ? sample.text : statementText(game, params.type || 'explain', 0.5, 0);
+        }
+        const r = await tryAct(game, a.item, params);
+        if (!r) {
+          if (step.optional) { WW.Guide.mark(game, step.id, 'skip'); continue; }
+          break;
+        }
+      }
+      if (st.finished) break;
+      const r = await game.endTurn();
+      if (!r.ok && !st.finished) throw new Error('endTurn failed: ' + r.reason);
+    }
+    return game;
+  }
+
+  return { STRATEGIES, playBot, playGuide, tryAct, finiteStats, statementText, smartStatement, topNegative, deleteSome, careful };
 }
 
 module.exports = { ROOT, FILES, loadContext, createBots };

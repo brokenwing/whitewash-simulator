@@ -41,7 +41,6 @@
     this.game = null;
     this.feedTab = 'all';
     this.seen = {};
-    this.guideShown = {};
     this.pane = 'center';
     this.lastAiToast = 0;
     this.unsub = [];
@@ -130,7 +129,8 @@
     var self = this;
     this.game = game;
     this.unsub.push(game.on('change', function () { self.render(); }));
-    this.unsub.push(game.on('busy', function (b) { self.setBusy(b); }));
+    /* 'change' fires while the game is still busy, so buttons rendered then are disabled: refresh once it settles */
+    this.unsub.push(game.on('busy', function (b) { self.setBusy(b); if (!b) self.render(); }));
     this.unsub.push(game.on('aiError', function (e) {
       var now = Date.now();
       if (now - self.lastAiToast < 8000) return;
@@ -211,6 +211,13 @@
     } else go();
   };
 
+  P.finishCase = function () {
+    var self = this;
+    WW.DOM.confirm('主任务已全部完成，现在结案吗？\n提前结案每剩一回合 +3 分（最多 +12）。', { ok: '立即结案' }).then(function (ok) {
+      if (ok && self.game.finishEarly()) self.showResult();
+    });
+  };
+
   P.fistFx = function () {
     var fx = h('div', { class: 'fist-fx', 'aria-hidden': 'true' }, h('span', null, '👊'));
     document.body.appendChild(fx);
@@ -237,7 +244,9 @@
     }));
     this.mobileTabs = tabs;
     this.room = h('div', { class: 'room' }, this.left, this.center, this.right);
-    WW.DOM.replace(this.container, h('div', { class: 'warroom' }, this.topbar, this.busyBar, tabs, this.room));
+    this.coachHost = h('div', { class: 'coach-host' });
+    this.warroom = h('div', { class: 'warroom' }, this.topbar, this.busyBar, tabs, this.room, this.coachHost);
+    WW.DOM.replace(this.container, this.warroom);
     this.applyPane();
     this.render();
   };
@@ -255,6 +264,7 @@
     this.renderLeft();
     this.renderCenter();
     this.renderRight();
+    this.renderCoach();
   };
 
   P.renderTop = function () {
@@ -265,20 +275,16 @@
     var pips = h('span', { class: 'ap-pips', title: '行动点 ' + st.ap + '/' + st.apMax });
     for (var i = 0; i < st.apMax; i++) pips.appendChild(h('i', { class: i < st.ap ? '' : 'used' }));
     var prog = Math.round(st.objectives.progress * 100);
-    this.endBtn = h('button', { class: 'btn primary', disabled: g.busy || st.finished, on: { click: function () { self.endTurn(); } } }, '结束回合 ▶');
+    this.endBtn = h('button', { class: 'btn primary', dataset: { coach: 'end-turn' }, disabled: g.busy || st.finished, on: { click: function () { self.endTurn(); } } }, '结束回合 ▶');
     WW.DOM.replace(this.topbar,
       h('div', { class: 'title' }, h('span', null, lv.meta.cover), lv.meta.title),
       h('span', { class: 'chip' }, D.difficulties[st.difficulty].icon + ' ' + D.difficulties[st.difficulty].name),
       h('div', { class: 'turn' }, g.turnLabel() + ' · 第 ' + st.turn + '/' + lv.contract.turns + ' 回合'),
-      h('div', { class: 'top-kpi' }, '预算 ', h('b', null, U.fmtMoney(st.budget))),
-      h('div', { class: 'top-kpi' }, '行动点 ', pips),
-      h('div', { class: 'top-kpi', title: '主任务推进度' }, '主任务 ', h('div', { class: 'progress' }, h('i', { style: { width: prog + '%' } })), h('b', null, prog + '%')),
+      h('div', { class: 'top-kpi', dataset: { coach: 'budget' } }, '预算 ', h('b', null, U.fmtMoney(st.budget))),
+      h('div', { class: 'top-kpi', dataset: { coach: 'ap' } }, '行动点 ', pips),
+      h('div', { class: 'top-kpi', title: '主任务推进度', dataset: { coach: 'progress' } }, '主任务 ', h('div', { class: 'progress' }, h('i', { style: { width: prog + '%' } })), h('b', null, prog + '%')),
       h('div', { class: 'spacer' }),
-      st.objectives.mainComplete && !st.finished ? h('button', { class: 'btn accent', on: { click: function () {
-        WW.DOM.confirm('主任务已全部完成，现在结案吗？\n提前结案每剩一回合 +3 分（最多 +12）。', { ok: '立即结案' }).then(function (ok) {
-          if (ok && g.finishEarly()) self.showResult();
-        });
-      } } }, '🏁 结案') : null,
+      st.objectives.mainComplete && !st.finished ? h('button', { class: 'btn accent', dataset: { coach: 'finish' }, on: { click: function () { self.finishCase(); } } }, '🏁 结案') : null,
       h('button', { class: 'btn ghost small', on: { click: function () { self.showLog(); } } }, '日志'),
       h('button', { class: 'btn ghost small', on: { click: function () { WW.SettingsUI.open({ onSave: function () { self.render(); } }); } } }, 'AI 设置'),
       h('button', { class: 'btn ghost small', on: { click: function () { self.showHelp(); } } }, '玩法'),
@@ -321,9 +327,9 @@
     }
 
     WW.DOM.replace(this.left,
-      h('div', { class: 'panel' }, h('div', { class: 'panel-title' }, '📊 舆情仪表盘', mon ? h('span', { class: 'chip' }, '监测中') : null), tiles, extra.length ? h('div', { class: 'col', style: { marginTop: '8px', gap: '4px' } }, extra) : null),
-      h('div', { class: 'panel' }, h('div', { class: 'panel-title' }, '👥 受众阵营', mon ? null : h('span', { class: 'muted tiny' }, '数值需舆情监测')), WW.Charts.factionBars(factions, mon)),
-      h('div', { class: 'panel' }, h('div', { class: 'panel-title' }, '🔥 热搜榜'), trend));
+      h('div', { class: 'panel', dataset: { coach: 'dashboard' } }, h('div', { class: 'panel-title' }, '📊 舆情仪表盘', mon ? h('span', { class: 'chip' }, '监测中') : null), tiles, extra.length ? h('div', { class: 'col', style: { marginTop: '8px', gap: '4px' } }, extra) : null),
+      h('div', { class: 'panel', dataset: { coach: 'factions' } }, h('div', { class: 'panel-title' }, '👥 受众阵营', mon ? null : h('span', { class: 'muted tiny' }, '数值需舆情监测')), WW.Charts.factionBars(factions, mon)),
+      h('div', { class: 'panel', dataset: { coach: 'trend' } }, h('div', { class: 'panel-title' }, '🔥 热搜榜'), trend));
   };
 
   /* Hot-search board: the main topic sits at its engine rank; values fall monotonically by rank. */
@@ -363,16 +369,9 @@
     var g = this.game;
     var st = g.state;
     var parts = [];
-    var guides = this.level.guide.filter(function (x) { return x.turn === st.turn; });
-    guides.forEach(function (gd, idx) {
-      var key = st.turn + ':' + idx;
-      if (self.guideShown[key]) return;
-      parts.push(h('div', { class: 'banner guide' }, h('span', null, '💡'), h('span', { class: 'grow' }, gd.text),
-        h('button', { class: 'btn small ghost', on: { click: function () { self.guideShown[key] = true; self.render(); } } }, '知道了')));
-    });
     if (st.objectives.mainComplete && !st.finished) {
       parts.push(h('div', { class: 'banner win' }, h('span', null, '🏁'), h('span', { class: 'grow' }, '主任务已完成！现在结案可拿提前结案加分，也可以继续经营冲击更高评级。'),
-        h('button', { class: 'btn small accent', on: { click: function () { if (g.finishEarly()) self.showResult(); } } }, '立即结案')));
+        h('button', { class: 'btn small accent', dataset: { coach: 'finish' }, on: { click: function () { if (g.finishEarly()) self.showResult(); } } }, '立即结案')));
     }
     var oppIds = Object.keys(st.opponents);
     if (oppIds.length) parts.push(this.renderOpponents());
@@ -410,7 +409,7 @@
           return h('button', { class: 'btn small', disabled: !ok || g.busy, on: { click: function () { WW.ItemUI.open(self, q[0], { oppId: id }); } } }, q[1]);
         })) : null);
     });
-    return h('div', { class: 'panel', style: { padding: '10px' } }, h('div', { class: 'panel-title' }, '🎯 对手盘', mon ? null : h('span', { class: 'muted tiny' }, '部署「舆情监测」可看清对手意图')), h('div', { class: 'opp-strip' }, cards));
+    return h('div', { class: 'panel', style: { padding: '10px' }, dataset: { coach: 'opponents' } }, h('div', { class: 'panel-title' }, '🎯 对手盘', mon ? null : h('span', { class: 'muted tiny' }, '部署「舆情监测」可看清对手意图')), h('div', { class: 'opp-strip' }, cards));
   };
 
   P.renderFeed = function () {
@@ -428,7 +427,7 @@
     posts.forEach(function (p) { self.seen[p.id] = true; });
     var scroll = h('div', { class: 'feed-scroll' }, list);
     this.feedScroll = scroll;
-    var panel = h('div', { class: 'panel feed-panel' },
+    var panel = h('div', { class: 'panel feed-panel', dataset: { coach: 'feed' } },
       h('div', { class: 'feed-head' }, h('b', null, '🗞 舆论场'), h('span', { class: 'muted small' }, '悬停帖子可删帖 / 控评 / 举报'), h('div', { class: 'spacer' }), tabs),
       scroll);
     setTimeout(function () { scroll.scrollTop = prevScroll; }, 0);
@@ -463,7 +462,7 @@
     var acts = (p.isClient ? [['control', '控评']] : [['delete', '删帖'], ['throttle', '限流'], ['control', '控评'], ['legal', '律师函'], ['iron_fist', '铁拳']]).filter(function (a) { return g.items[a[0]]; });
     var isNew = p.turn === st.turn && !this.seen[p.id] && st.turn > 1;
     var cls = 'post ' + (mon && !p.isClient ? 's' + p.stance : 'nostance') + (isNew ? ' new' : '');
-    return h('article', { class: cls, tabindex: 0 },
+    return h('article', { class: cls, tabindex: 0, dataset: { post: p.id } },
       h('div', { class: 'post-head' }, platformBadge(p.platform), h('span', { class: 'post-author' }, p.author.name),
         tier !== 'normal' ? h('span', { class: 'tier ' + tier }, (D.tiers[tier] || {}).name) : null,
         p.opp && st.opponents[p.opp] ? h('span', { class: 'tier' }, st.opponents[p.opp].avatar) : null,
@@ -512,7 +511,7 @@
       if (ts.status === 'hidden' || (t.hidden && ts.status !== 'done')) return null;
       var label = { active: '进行中', done: '已完成', failed: '已失败', offered: '待接受', declined: '已婉拒' }[ts.status] || ts.status;
       var rw = t.rewards.length ? WW.Effects.describeList(t.rewards, lv, { skipFlavor: true }) : '';
-      return h('div', { class: 'side-task' },
+      return h('div', { class: 'side-task', dataset: { coach: 'side:' + t.id } },
         h('div', { class: 'st-h' }, ts.status === 'done' ? '✅' : ts.status === 'failed' ? '❌' : '📌', t.title, h('span', { class: 'spacer' }), h('span', { class: 'chip' }, label)),
         t.desc ? h('div', { class: 'sub' }, t.desc) : null,
         rw ? h('div', { class: 'tiny muted' }, '奖励：' + rw) : null,
@@ -521,7 +520,7 @@
           h('button', { class: 'btn small accent', on: { click: function () { g.respondTask(t.id, true); self.save(); } } }, '接下'),
           h('button', { class: 'btn small', on: { click: function () { g.respondTask(t.id, false); self.save(); } } }, '婉拒')) : null);
     }).filter(Boolean);
-    return h('div', { class: 'panel' },
+    return h('div', { class: 'panel', dataset: { coach: 'tasks' } },
       h('div', { class: 'panel-title' }, '📋 合同任务', h('span', { class: 'spacer' }), h('span', { class: 'chip' }, '推进度 ' + Math.round(ob.progress * 100) + '%')),
       h('div', { class: 'stage-list' }, stageEls),
       side.length ? h('div', { class: 'col', style: { marginTop: '10px', gap: '6px' } }, h('div', { class: 'label' }, '支线 / 额外委托'), side) : null);
@@ -536,7 +535,7 @@
       var targetItem = item.target === 'post' || item.target === 'postOrOpponent' || item.target === 'opponent' || item.target === 'fact' || item.target === 'criterion';
       var usable = status.usable;
       var sub = status.locked ? '🔒 ' + status.reason : usable ? (status.voucher ? '免费券 ×' + status.voucher : (item.handler === 'shill' || item.handler === 'delete' || item.handler === 'throttle' || item.handler === 'kol' || item.handler === 'settle' || item.handler === 'coopt' ? '按方案计价' : U.fmtMoney(status.cost))) + ' · ' + item.ap + 'AP' : status.reason;
-      var btn = h('button', { class: 'item-btn' + (status.locked ? ' locked disabled' : usable ? '' : ' disabled'), on: { click: function () {
+      var btn = h('button', { class: 'item-btn' + (status.locked ? ' locked disabled' : usable ? '' : ' disabled'), dataset: { coach: 'item:' + id }, on: { click: function () {
         if (!usable) { WW.DOM.toast('「' + item.name + '」' + status.reason, 'warn'); return; }
         WW.ItemUI.open(self, id, {});
       } } },
@@ -547,7 +546,7 @@
       });
       return btn;
     });
-    return h('div', { class: 'panel' }, h('div', { class: 'panel-title' }, '🧰 道具'), h('div', { class: 'items-grid' }, buttons));
+    return h('div', { class: 'panel', dataset: { coach: 'items' } }, h('div', { class: 'panel-title' }, '🧰 道具'), h('div', { class: 'items-grid' }, buttons));
   };
 
   P.renderChat = function () {
@@ -563,7 +562,140 @@
       return h('div', { class: 'sys-note' }, (m.from === 'news' ? '📰 ' : '🛰 ') + m.text);
     }));
     setTimeout(function () { chat.scrollTop = chat.scrollHeight; }, 0);
-    return h('div', { class: 'panel' }, h('div', { class: 'panel-title' }, '💬 客户群 · ' + this.level.client.name), chat);
+    return h('div', { class: 'panel', dataset: { coach: 'chat' } }, h('div', { class: 'panel-title' }, '💬 客户群 · ' + this.level.client.name), chat);
+  };
+
+  /* ------------------------------------------------------------------ tutorial coach */
+
+  /* Resolves a guide target ("item:statement", "post:fact:f2", "end-turn", ...) to live elements. */
+  P.coachTargets = function (target) {
+    if (!target || !this.warroom) return [];
+    if (target.indexOf('post:') === 0) {
+      var p = WW.Guide.findPost(this.game, target.slice(5));
+      return p ? Array.prototype.slice.call(this.warroom.querySelectorAll('[data-post="' + p.id + '"]')) : [];
+    }
+    return Array.prototype.slice.call(this.warroom.querySelectorAll('[data-coach="' + target + '"]'));
+  };
+
+  /* Brings a target into view: switches the mobile pane / feed tab, then scrolls to it. */
+  P.coachLocate = function (target) {
+    var els = this.coachTargets(target);
+    if (!els.length && target && target.indexOf('post:') === 0 && this.feedTab !== 'all') {
+      this.feedTab = 'all';
+      this.render();
+      els = this.coachTargets(target);
+    }
+    var el = els[0];
+    if (!el) return;
+    var pane = el.closest('[data-pane]');
+    if (pane && pane.dataset.pane !== this.pane) { this.pane = pane.dataset.pane; this.applyPane(); }
+    if (window.matchMedia('(max-width: 980px)').matches) {
+      /* single-column layout scrolls the page and the card covers its bottom: center in the space above it */
+      var coach = this.coachHost.querySelector('.coach');
+      var r = el.getBoundingClientRect();
+      var free = window.innerHeight - (coach ? coach.offsetHeight + 16 : 0);
+      window.scrollTo({ top: window.scrollY + r.top - Math.max(60, (free - r.height) / 2), behavior: 'smooth' });
+    } else {
+      el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }
+  };
+
+  P.coachAction = function (step) {
+    var self = this;
+    var a = step.action;
+    if (a.cmd === 'endTurn') return this.endTurn();
+    if (a.cmd === 'finish') return this.finishCase();
+    if (a.cmd === 'accept') { this.game.respondTask(a.task, true); this.save(); return; }
+    var preset = {};
+    Object.keys(a.preset).forEach(function (k) { preset[k] = a.preset[k]; });
+    var guide = { hint: preset.hint || '', sample: preset.sample || null };
+    delete preset.hint;
+    delete preset.sample;
+    if (preset.post) {
+      var p = WW.Guide.findPost(this.game, preset.post);
+      delete preset.post;
+      if (p) preset.postId = p.id;
+    }
+    this.coachLocate(step.target);
+    WW.ItemUI.open(self, a.item, preset, guide);
+  };
+
+  P.renderCoach = function () {
+    var self = this;
+    var g = this.game;
+    var st = g.state;
+    var lv = this.level;
+    Array.prototype.forEach.call(this.warroom.querySelectorAll('.coach-hl'), function (el) { el.classList.remove('coach-hl'); });
+    if (!lv.guide.some(function (x) { return x.at !== 'result'; }) || st.finished) {
+      WW.DOM.clear(this.coachHost);
+      this.warroom.classList.remove('has-coach');
+      return;
+    }
+    var info = WW.Guide.sync(g);
+    info.justDone.forEach(function (x) { WW.DOM.toast('✅ 教程：' + x.title, 'good', 2600); });
+    var tutorial = WW.Guide.isTutorial(lv);
+    var label = tutorial ? '📘 教程' : '💡 提示';
+    var rerender = function () { self.save(); self.render(); };
+    if (info.complete || (!info.current && !info.waiting)) {
+      WW.DOM.clear(this.coachHost);
+      this.warroom.classList.remove('has-coach');
+      return;
+    }
+    if (info.hidden) {
+      this.warroom.classList.remove('has-coach');
+      WW.DOM.replace(this.coachHost, h('button', { class: 'coach-pill', on: { click: function () { WW.Guide.setHidden(g, false); rerender(); } } },
+        label + (tutorial ? ' · ' + info.index + '/' + info.total : ''), h('span', { class: 'muted' }, ' 展开')));
+      return;
+    }
+    var step = info.current;
+    var target = step ? step.target : 'end-turn';
+    var outOfAp = step && step.done && st.ap === 0;
+    if (outOfAp) target = 'end-turn';
+    var body = [];
+    if (step) {
+      if (step.title) body.push(h('div', { class: 'coach-title' }, step.title));
+      body.push(h('div', { class: 'coach-text' }, step.text));
+      info.notes.forEach(function (n) { body.push(h('div', { class: 'coach-note' }, n)); });
+      if (outOfAp) body.push(h('div', { class: 'coach-note' }, '这回合的行动点用完了：点右上角「结束回合 ▶」，下回合再继续这一步。'));
+    } else {
+      body.push(h('div', { class: 'coach-title' }, '本回合的教学完成了'));
+      body.push(h('div', { class: 'coach-text' }, st.ap > 0
+        ? '还有 ' + st.ap + ' 个行动点，可以自由使用道具；不想用也没关系，点右上角「结束回合 ▶」进入下一回合。'
+        : '行动点用完了。点右上角「结束回合 ▶」进入下一回合，看看晨报里发生了什么。'));
+    }
+    var buttons = [];
+    if (step && step.action && !outOfAp) {
+      var a = step.action;
+      var item = a.item ? g.items[a.item] : null;
+      var status = item ? g.itemStatus(a.item) : null;
+      var usable = !item || status.usable;
+      var actLabel = a.label || (item ? '使用「' + item.name + '」' : { finish: '立即结案', accept: '接下', endTurn: '结束回合' }[a.cmd]);
+      buttons.push(h('button', { class: 'btn small primary', disabled: !usable || g.busy, title: usable ? '' : status.reason, on: { click: function () { self.coachAction(step); } } }, actLabel));
+      if (!usable) body.push(h('div', { class: 'coach-note' }, '「' + item.name + '」暂时用不了：' + status.reason));
+    }
+    if (!step || outOfAp) {
+      buttons.push(h('button', { class: 'btn small primary', disabled: g.busy, on: { click: function () { self.endTurn(); } } }, '结束回合 ▶'));
+    }
+    if (target && this.coachTargets(target).length) {
+      buttons.push(h('button', { class: 'btn small', on: { click: function () { self.coachLocate(target); } } }, '在哪里？'));
+    }
+    if (step && !step.done) {
+      buttons.push(h('button', { class: 'btn small accent', on: { click: function () { WW.Guide.mark(g, step.id, 'ack'); rerender(); } } }, tutorial ? '下一步' : '知道了'));
+    } else if (step && step.optional) {
+      buttons.push(h('button', { class: 'btn small ghost', on: { click: function () { WW.Guide.mark(g, step.id, 'skip'); rerender(); } } }, '跳过这一步'));
+    }
+    var card = h('div', { class: 'coach', role: 'region', 'aria-label': '教程', 'aria-live': 'polite' },
+      h('div', { class: 'coach-head' },
+        h('span', { class: 'coach-tag' }, label),
+        tutorial ? h('span', { class: 'tiny muted' }, '第 ' + info.index + ' / ' + info.total + ' 步') : null,
+        h('span', { class: 'spacer' }),
+        h('button', { class: 'x-btn', title: '收起教程', 'aria-label': '收起教程', on: { click: function () { WW.Guide.setHidden(g, true); rerender(); } } }, '–')),
+      tutorial ? h('div', { class: 'coach-bar' }, h('i', { style: { width: Math.round(info.finished / info.total * 100) + '%' } })) : null,
+      body,
+      h('div', { class: 'coach-actions' }, buttons));
+    WW.DOM.replace(this.coachHost, card);
+    this.warroom.classList.add('has-coach');
+    this.coachTargets(target).forEach(function (el) { el.classList.add('coach-hl'); });
   };
 
   /* ------------------------------------------------------------------ dialogs */
@@ -574,19 +706,33 @@
     var st = g.state;
     if (!b) return;
     var lastClient = st.messages.filter(function (m) { return m.from === 'client' && m.turn === st.turn; }).slice(-1)[0];
-    var guide = this.level.guide.filter(function (x) { return x.turn === st.turn; });
+    var next = WW.Guide.sync(g).current;
+    var turnSteps = WW.Guide.forTurn(g);
+    var tips = turnSteps.filter(function (x) { return !x.done && !x.title; });
+    var steps = turnSteps.filter(function (x) { return x.title; });
+    if (!steps.length && next && next.title) steps = [next];
+    var guideBox = tips.length || steps.length ? h('div', { class: 'banner guide' }, h('span', null, steps.length ? '📘' : '💡'), h('div', { class: 'col', style: { gap: '4px', flex: '1 1 0', minWidth: '0' } },
+      tips.map(function (x) { return h('span', null, x.text); }),
+      steps.length ? h('span', null, h('b', null, '本回合教程：'), steps.map(function (x) { return x.title; }).join(' → ')) : null,
+      steps.length ? h('span', { class: 'tiny muted' }, '左下角的教程卡片会一步步带你做。') : null)) : null;
     var body = h('div', { class: 'col', style: { gap: '12px' } },
       b.first ? h('div', { class: 'report-box' }, this.level.incident.summary) : null,
-      b.summary ? h('div', { class: 'report-box' }, '🛰 舆情简报：' + b.summary) : null,
+      b.summary && !b.first ? h('div', { class: 'report-box' }, '🛰 舆情简报：' + b.summary) : null,
       b.deltas ? deltaChips(b.deltas) : null,
       b.lines && b.lines.length ? h('div', { class: 'turn-lines' }, b.lines.map(function (l) { return h('div', { class: 'turn-line' }, h('span', { class: 'ic' }, LINE_ICONS[l.kind] || '•'), h('span', null, l.text)); })) : (b.first ? null : h('div', { class: 'small muted' }, '这一夜风平浪静。')),
       b.headlines && b.headlines.length ? h('div', { class: 'row wrap' }, h('span', { class: 'small muted' }, '新热搜：'), b.headlines.map(function (t) { return h('span', { class: 'chip' }, '#' + t + '#'); })) : null,
       lastClient ? h('div', { class: 'bubble-row' }, h('div', { class: 'bubble-avatar' }, this.level.client.contact.slice(0, 1)), h('div', { class: 'bubble ' + (lastClient.mood || '') }, lastClient.text)) : null,
-      guide.length ? h('div', { class: 'banner guide' }, h('span', null, '💡'), h('div', { class: 'col', style: { gap: '4px' } }, guide.map(function (x) { return h('span', null, x.text); }))) : null);
+      guideBox);
     var m = WW.DOM.modal({
       title: (b.first ? '接单 · ' : '晨报 · ') + g.turnLabel() + '（第 ' + st.turn + '/' + this.level.contract.turns + ' 回合）',
       wide: true, body: body,
-      footer: [h('button', { class: 'btn primary', on: { click: function () { guide.forEach(function (x, i) { self.guideShown[st.turn + ':' + i] = true; }); m.close(); self.render(); } } }, '开始行动')]
+      footer: [h('button', { class: 'btn primary', on: { click: function () { m.close(); } } }, '开始行动')],
+      onClose: function () {
+        /* plain tips were read here; tutorial steps stay on the coach card */
+        tips.forEach(function (x) { WW.Guide.mark(g, x.id, 'ack'); });
+        self.save();
+        self.render();
+      }
     });
   };
 
@@ -629,6 +775,7 @@
       if (ts.status === 'hidden' || ts.status === 'declined') return null;
       return h('div', { class: 'small' }, (ts.status === 'done' ? '✅ ' : '❌ ') + t.title);
     }).filter(Boolean);
+    var lessons = WW.Guide.resultNotes(g);
 
     var view = h('div', { class: 'result' },
       h('div', { class: 'result-head' },
@@ -637,6 +784,10 @@
           h('h2', { style: { margin: 0 } }, (st.result === 'win' ? '✅ ' : '❌ ') + st.endTitle),
           h('div', { class: 'result-sub' }, st.endText),
           h('div', { class: 'result-sub' }, '得分 ' + f.score + ' · 基础 ' + f.base + (f.progressMul < 1 ? ' × 主任务推进 ' + f.progressMul : '') + (f.bonus ? ' + 加分 ' + f.bonus : '') + ' · ' + D.difficulties[st.difficulty].name + '难度'))),
+      lessons.map(function (x) {
+        return h('div', { class: 'banner guide', style: { marginTop: '16px', alignItems: 'flex-start' } }, h('span', null, '📘'),
+          h('div', { class: 'col', style: { gap: '4px' } }, x.title ? h('b', null, x.title) : null, h('span', { style: { whiteSpace: 'pre-line' } }, x.text)));
+      }),
       h('div', { class: 'section-title' }, '评分构成'),
       h('div', { class: 'score-parts' }, f.parts.map(function (p) {
         return h('div', { class: 'tile' }, h('div', { class: 't-label' }, p.label + ' · 权重 ' + Math.round(p.weight * 100) + '%'), h('div', { class: 't-value' }, String(Math.round(p.value))), WW.Charts.meter(p.value, 100));

@@ -67,7 +67,7 @@ flowchart LR
 | `victory` | 对象 | `condition` 到期胜利条件、`text` |
 | `defeat[]` | 对象 | 追加失败条件；`id` 与默认的 `fired` `exposed` `collapse` 同名则覆盖 |
 | `grading` | 对象 | `weights`（sentiment heat credibility satisfaction budget exposure）、`thresholds`（S A B C） |
-| `guide[]` | 对象 | 教程提示：`turn` `text` |
+| `guide[]` | 对象 | 教程步骤 / 提示，见第 8 节 |
 | `ai` | 对象 | 写进 AI 系统提示词：`context` 补充设定、`style` 文风、`extraRules` 额外要求 |
 | `offline` | 对象 | 离线文本池，结构同 `js/data/pools.js`，会和内置文本池合并 |
 
@@ -113,7 +113,8 @@ flowchart LR
 | `faction.<阵营id>` | 阵营好感 |
 | `opp.<对手id>.morale` / `.strength` / `.active` | 对手士气、势力、是否在场 |
 | `fact.<事实id>.revealed` / `.refuted` / `.admitted` / `.denied` / `.known` / `.fixed` / `.isTrue` | 事实状态 |
-| `task.<任务id>.done` / `.failed` / `.active` | 子任务状态 |
+| `task.<任务id>.done` / `.failed` / `.active` / `.offered` / `.declined` | 子任务 / 支线状态 |
+| `result` | 结局：`"win"` / `"lose"`，结案前为空（用于结算页的教程小结） |
 | `itemUses.<道具id>` / `itemUsesTurn.<道具id>` | 道具累计 / 本回合使用次数 |
 | `flags.<名称>` | 剧情标记（由 `flag` 效果设置） |
 | `counters.<名称>` | 计数器：`violations` 红线违规次数、`exposeSuccess` 扒皮成功、`faceSlaps` 被打脸、`regulated` 被约谈、`shillExposed` 水军被扒…… |
@@ -249,7 +250,41 @@ AI 按 `prompt` 和玩家输入给出数值，引擎把每个数值截断到 `bo
 
 ---
 
-## 8. 用编辑器制作关卡
+## 8. 教程引导 `guide[]`
+
+`guide` 是按顺序排列的步骤，显示在作战室左下角的教程卡片里（可收起）。当前步骤 = 第一个“还没完成、且已经可以出现”的步骤；进度存在存档里，读档后接着走。内置教程关 `levels/00_tutorial.js` 是完整示例。
+
+```json
+{ "id": "fist", "turn": 2, "title": "召唤铁拳：打掉谣言",
+  "text": "对传谣的帖子使用「召唤铁拳」……",
+  "target": "post:fact:f2",
+  "when": { "var": "stage", "op": ">=", "value": 1 },
+  "done": { "any": [{ "var": "itemUses.iron_fist", "op": ">=", "value": 1 }, { "var": "fact.f2.refuted", "op": "==", "value": true }] },
+  "action": { "item": "iron_fist", "label": "举报这条谣言", "preset": { "post": "fact:f2", "hint": "目标已经选好……" } } }
+```
+
+| 字段 | 说明 |
+|---|---|
+| `id` | 进度按 id 记录，改名会让老存档重走这一步 |
+| `turn` | 最早出现的回合（默认 1） |
+| `title` `text` | 卡片标题与正文（`\n` 换行）。没有 `title` 的是旧式提示：只在晨报里显示，读完即消失 |
+| `when` | 出现条件；不满足时跳过它看下一步，满足后再回来 |
+| `done` | 完成条件：满足后自动打勾并弹出“✅ 教程：…”。没有 `done` 的步骤是说明，玩家点“下一步” |
+| `skip` | 满足时直接丢弃这一步（例如主任务都完成了，就不用再推荐舆情监测） |
+| `until` | 过了这个回合还没处理就作废；没有 `done` 也没有 `when` 的步骤默认只活一回合 |
+| `optional` | 显示“跳过这一步”按钮 |
+| `target` | 高亮并可“在哪里？”定位的界面元素：`item:<道具id>`、`post:fact:<事实id>`（传这条说法最火的帖子）、`post:negative`（最火的未控评负面帖）、`post:official`、`end-turn`、`finish`、`tasks`、`side:<支线id>`、`items`、`dashboard`、`factions`、`trend`、`feed`、`opponents`、`chat`、`budget`、`ap`、`progress` |
+| `action` | 卡片上的主按钮：`{ "item": 道具id, "label", "preset" }` 打开道具对话框；`preset` 里的 `post` 用上面的帖子选择器预选目标，`hint` 显示在对话框顶部，公文还支持 `type` 和 `sample: { title, text }`（“📋 填入示范稿”按钮）。也可以是 `{ "cmd": "endTurn" }`、`{ "cmd": "finish" }`（结案）、`{ "cmd": "accept", "task": 支线id }` |
+| `notes` | `[{ "when": 条件, "text": "…" }]`：条件满足时追加在卡片里的提醒（比如“铁拳没砸中，冷却后再试”） |
+| `at` | `"result"`：不在游戏中显示，而是在结算页作为“📘 教程小结”，配合 `when: { "var": "result", "op": "==", "value": "win" }` 区分胜负 |
+
+卡片还会自动处理两种情况：当前步骤需要行动但行动点已用完时，提示并高亮「结束回合」；本回合没有可做的步骤时，提示可以自由行动或结束回合。
+
+`tests/run.js` 里的“following the guide card wins”用一个只照卡片操作的机器人跑教程关，保证教程本身能带人通关。
+
+---
+
+## 9. 用编辑器制作关卡
 
 打开 `LevelEditor.html`：
 

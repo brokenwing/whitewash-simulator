@@ -446,13 +446,26 @@
     },
     {
       id: 'ai', title: '引导 · AI · 离线文本', icon: '🤖',
-      desc: '教程提示按回合出现；AI 设定会写进系统提示词；离线文本池在不调用 AI 时使用（会和内置文本池合并）。',
+      desc: '教程步骤按顺序显示在左下角卡片里：设了“完成条件”的步骤做到就自动打勾，没设的是“下一步”式说明。AI 设定会写进系统提示词；离线文本池在不调用 AI 时使用（会和内置文本池合并）。',
       fields: [
         {
-          key: 'guide', label: '教程提示', type: 'list', full: true,
-          itemTitle: function (it) { return '第 ' + (it.turn || 1) + ' 回合：' + String(it.text || '').slice(0, 24); },
-          newItem: function () { return { turn: 1, text: '' }; },
-          fields: [{ key: 'turn', label: '回合', type: 'number' }, { key: 'text', label: '内容', type: 'textarea', full: true }]
+          key: 'guide', label: '教程步骤', type: 'list', full: true,
+          itemTitle: function (it) { return (it.at === 'result' ? '结算页：' : '第 ' + (it.turn || 1) + ' 回合起：') + String(it.title || it.text || '').slice(0, 24); },
+          newItem: function (lv) { return { id: nextId(lv.guide, 'step'), turn: 1, title: '', text: '' }; },
+          fields: [
+            { key: 'id', label: 'ID', type: 'text' },
+            { key: 'title', label: '标题（留空 = 只显示一回合的旧式提示）', type: 'text' },
+            { key: 'turn', label: '最早出现的回合', type: 'number', min: 1 },
+            { key: 'at', label: '显示位置', type: 'select', options: [{ value: 'play', label: '游戏中（教程卡片）' }, { value: 'result', label: '结算页（教程小结）' }] },
+            { key: 'text', label: '内容', type: 'textarea', full: true },
+            { key: 'target', label: '高亮目标（item:道具ID、post:fact:事实ID、post:negative、end-turn、finish、tasks、side:支线ID、dashboard、feed、opponents、chat）', type: 'text', full: true },
+            { key: 'when', label: '出现条件（留空 = 总是）', type: 'cond', full: true },
+            { key: 'done', label: '完成条件（留空 = 玩家点“下一步”）', type: 'cond', full: true },
+            { key: 'skip', label: '跳过条件', type: 'cond', full: true },
+            { key: 'optional', label: '允许玩家跳过', type: 'bool' },
+            { key: 'action', label: '按钮（JSON，如 {"item":"iron_fist","label":"举报","preset":{"post":"fact:f2","hint":"…"}}，或 {"cmd":"endTurn"} / {"cmd":"finish"} / {"cmd":"accept","task":"支线ID"}）', type: 'json', full: true, rows: 4 },
+            { key: 'notes', label: '附加提示（JSON，如 [{"when":{…},"text":"…"}]）', type: 'json', full: true, rows: 3 }
+          ]
         },
         { key: 'ai.context', label: '补充设定（给 AI）', type: 'textarea', full: true },
         { key: 'ai.style', label: '文风', type: 'textarea', full: true },

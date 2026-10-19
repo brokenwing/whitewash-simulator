@@ -29,7 +29,7 @@ function test(name, fn) {
 }
 function assert(cond, msg) { if (!cond) throw new Error(msg || 'assertion failed'); }
 function eq(a, b, msg) { if (a !== b) throw new Error((msg || 'not equal') + ': ' + JSON.stringify(a) + ' !== ' + JSON.stringify(b)); }
-const { STRATEGIES, playBot, finiteStats, statementText } = createBots(WW);
+const { STRATEGIES, playBot, playGuide, finiteStats, statementText } = createBots(WW);
 
 /* ------------------------------------------------------------------ unit tests */
 async function unitTests() {
@@ -138,6 +138,43 @@ async function unitTests() {
       eq(WW.LLM.extractJSON('{"x": "含有}括号的字符串", "y": 2} 以上').y, 2);
     });
   }
+
+  await test('guide: tips expire, steps wait for their condition and complete by themselves', async () => {
+    const lv = WW.Schema.blank();
+    lv.guide = [
+      { turn: 1, text: '旧格式提示' },
+      { id: 'pub', title: '发公文', text: '', done: { var: 'itemUses.statement', op: '>=', value: 1 } },
+      { id: 'later', title: '第二回合', text: '', turn: 2 },
+      { id: 'gated', title: '热度低了', text: '', when: { var: 'stats.heat', op: '<=', value: -1 } },
+      { id: 'bye', at: 'result', title: '结语', text: '', when: { var: 'result', op: '!=', value: '' } }
+    ];
+    const game = new WW.Engine.Game(lv, { seed: 2 });
+    assert(WW.Guide.isTutorial(game.level), 'has done steps = tutorial');
+    eq(WW.Guide.sync(game).current.id, 'guide1');
+    WW.Guide.mark(game, 'guide1');
+    eq(WW.Guide.sync(game).current.id, 'pub');
+    assert((await game.act('statement', { type: 'explain', channel: 'weibo', text: statementText(game, 'explain', 1, 1) })).ok, 'statement published');
+    const info = WW.Guide.sync(game);
+    eq(info.current, null, 'turn-2 step not available yet');
+    assert(info.waiting, 'waiting for the next turn');
+    await game.endTurn();
+    eq(WW.Guide.sync(game).current.id, 'later');
+    WW.Guide.mark(game, 'later');
+    eq(WW.Guide.sync(game).current, null, 'gated step stays hidden');
+    eq(WW.Guide.resultNotes(game).length, 0);
+    game.finishEarly() || game.endGame('lose');
+    eq(WW.Guide.resultNotes(game).map((g) => g.id).join(), 'bye');
+  });
+
+  await test('tutorial: following the guide card wins', async () => {
+    const lv = WW.Levels.get('tutorial_crayfish');
+    for (const diff of ['intern', 'regular', 'gold']) {
+      for (let seed = 1; seed <= 8; seed++) {
+        const game = await playGuide(lv, seed, diff);
+        eq(game.state.result, 'win', diff + ' seed ' + seed + ' (' + game.state.endTitle + ')');
+      }
+    }
+  });
 
   for (const entry of WW.Levels.list()) {
     await test('level validates: ' + entry.id, () => {

@@ -726,7 +726,7 @@
       }
       st.flags.rectified = true;
       game.queuePosts({ kind: 'news', count: 1, stance: 1, tier: 'media', pool: 'rectify', hint: game.level.client.name + '宣布全面整改，第三方机构进驻', tags: ['整改'] });
-      return Promise.resolve({ text: '启动真诚整改：未来几回合口碑与公信力稳步回升', detail: { kind: 'rectify' } });
+      return Promise.resolve({ text: '启动' + item.name + '：未来几回合口碑与公信力稳步回升', detail: { kind: 'rectify' } });
     }
   });
 
