@@ -40,7 +40,7 @@
     control: {
       id: 'control', name: '控评', icon: '🛡️', tier: 1, ap: 1, cost: 3,
       handler: 'control', channel: 'shill', target: 'post', ai: 'control.generate',
-      desc: '选中一条热帖，把好评顶上热评、折叠负面评论；也能护住己方内容不被举报冲掉。',
+      desc: '选中一条热帖，把好评顶上热评、折叠负面评论。也能控自家的官方公文、软文和水军帖，护住它们 2 回合不被抱团举报冲掉。',
       risk: '暴露度上升；评论区太整齐会被嘲“控评”。',
       params: { exposure: 3 }
     },

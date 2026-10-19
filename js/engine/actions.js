@@ -307,7 +307,8 @@
     run: function (game, item, params) {
       var st = game.state;
       var p = targetPost(game, params);
-      return game.runAI('control.generate', { post: { author: p.author.name, content: p.content.slice(0, 200), platform: (D.platforms[p.platform] || {}).name }, direction: params.direction || '' }).then(function (res) {
+      var own = p.isClient || p.isShill || p.source === 'kol';
+      return game.runAI('control.generate', { post: { author: p.author.name, content: p.content.slice(0, 200), platform: (D.platforms[p.platform] || {}).name, own: own, official: !!p.isClient }, direction: params.direction || '' }).then(function (res) {
         var negatives = p.comments.filter(function (c) { return c.stance < 0; }).length;
         p.foldedComments += negatives + Math.round(p.commentCount * 0.3);
         p.comments = (res.data.comments || []).slice(0, 4).map(function (c) {
@@ -410,6 +411,8 @@
   register('legal', {
     validate: function (game, item, params) {
       if (!targetPost(game, params) && !targetOpp(game, params)) return '请选择一条帖子或一个对手';
+      var p = targetPost(game, params);
+      if (p && p.isClient) return '不能给自家官方帖发律师函';
       return '';
     },
     run: function (game, item, params) {

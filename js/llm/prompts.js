@@ -241,7 +241,9 @@
       effort: 'low', maxTokens: 16000,
       shape: S.obj({ comments: S.arr(AUTHORED, 4) }),
       user: function (game, a) {
-        return situation(game) + '\n\n要给下面这条帖子“控评”：写 3~4 条会被顶上热评的正面或理性评论' + (a.direction ? '，方向：' + a.direction : '') + '。别太假。\n帖子（' + a.post.platform + '，' + a.post.author + '）：' + a.post.content;
+        return situation(game) + '\n\n要给下面这条帖子“控评”：写 3~4 条会被顶上热评的正面或理性评论' + (a.direction ? '，方向：' + a.direction : '') + '。别太假。' +
+          (a.post.official ? '这是客户的官方声明，评论要像普通网友自发表示理解和支持，不要替官方说话。' : a.post.own ? '这是我方安排的内容，评论要像路人自发认同。' : '') +
+          '\n帖子（' + a.post.platform + '，' + a.post.author + '）：' + a.post.content;
       }
     },
 

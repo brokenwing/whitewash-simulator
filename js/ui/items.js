@@ -32,11 +32,12 @@
   }
 
   function postLabel(p) {
-    return '[' + (D.platforms[p.platform] || {}).name + '] ' + p.author.name + '：' + (p.title || p.content).slice(0, 40);
+    return (p.isClient ? '【官方】' : '') + '[' + (D.platforms[p.platform] || {}).name + '] ' + p.author.name + '：' + (p.title || p.content).slice(0, 40);
   }
 
-  function postOptions(game, filter) {
-    return WW.Feed.ranked(game.state, 'all').filter(function (p) { return p.status !== 'deleted' && !p.isClient && (!filter || filter(p)); }).slice(0, 25);
+  /* includeOwn: also list the client's official posts (only control may target them) */
+  function postOptions(game, filter, includeOwn) {
+    return WW.Feed.ranked(game.state, 'all').filter(function (p) { return p.status !== 'deleted' && (includeOwn || !p.isClient) && (!filter || filter(p)); }).slice(0, 25);
   }
 
   function header(item, status) {
@@ -67,14 +68,14 @@
       okBtn.disabled = !st.voucher && c > game.state.budget + 1e-9;
     };
 
-    var buildTargetPicker = function (allowPosts, allowOpps, postFilter) {
+    var buildTargetPicker = function (allowPosts, allowOpps, postFilter, includeOwn) {
       var opps = Object.keys(game.state.opponents).map(function (k) { return game.state.opponents[k]; }).filter(function (o) { return o.active; });
       var mode = params.oppId ? 'opp' : (allowPosts ? 'post' : 'opp');
       var wrap = h('div', { class: 'col' });
       var render = function () {
         var sel;
         if (mode === 'post') {
-          var posts = postOptions(game, postFilter);
+          var posts = postOptions(game, postFilter, includeOwn);
           if (!params.postId && posts[0]) params.postId = posts[0].id;
           sel = h('select', { class: 'input', on: { change: function () { params.postId = sel.value; refreshCost(); } } },
             posts.map(function (p) { return h('option', { value: p.id, selected: p.id === params.postId }, postLabel(p)); }));
@@ -164,7 +165,7 @@
         break;
       }
       case 'control': {
-        form.appendChild(buildTargetPicker(true, false, function (p) { return !p.controlled; }));
+        form.appendChild(buildTargetPicker(true, false, function (p) { return !p.controlled; }, true));
         var cd = h('input', { class: 'input', placeholder: '（可选）热评方向，例如：强调已经整改' });
         cd.addEventListener('input', function () { params.direction = cd.value; });
         form.appendChild(h('div', { class: 'field' }, h('label', null, '热评方向'), cd));

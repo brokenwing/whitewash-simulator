@@ -460,7 +460,7 @@
     if (mon && p.oppShill) tags.push(h('span', { class: 'ptag warn' }, '对家水军'));
     (p.tags || []).forEach(function (t) { if (['官方', '截图'].indexOf(t) < 0) tags.push(h('span', { class: 'ptag' }, t)); });
     var tier = p.author.tier;
-    var acts = p.isClient ? [] : [['delete', '删帖'], ['throttle', '限流'], ['control', '控评'], ['legal', '律师函'], ['iron_fist', '铁拳']].filter(function (a) { return g.items[a[0]]; });
+    var acts = (p.isClient ? [['control', '控评']] : [['delete', '删帖'], ['throttle', '限流'], ['control', '控评'], ['legal', '律师函'], ['iron_fist', '铁拳']]).filter(function (a) { return g.items[a[0]]; });
     var isNew = p.turn === st.turn && !this.seen[p.id] && st.turn > 1;
     var cls = 'post ' + (mon && !p.isClient ? 's' + p.stance : 'nostance') + (isNew ? ' new' : '');
     return h('article', { class: cls, tabindex: 0 },
