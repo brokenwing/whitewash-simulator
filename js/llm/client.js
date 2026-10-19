@@ -5,7 +5,9 @@
  *  - OpenAI-compatible (DeepSeek / 通义 / Kimi / 智谱 / 豆包 / 硅基流动 / Ollama ...): fetch.
  * Optional local relay (tools/serve.py) for providers that block browser CORS:
  *    {proxyURL}/llm-proxy/<base64url(baseURL)>/<path>
- * The API key is stored separately from the other settings, in localStorage or sessionStorage.
+ * The API key is stored separately from the other settings: in localStorage / sessionStorage, or — keyMode
+ * 'server' — held by tools/serve.py (POST /api/key), which injects it into proxied requests so this page
+ * never sees it again; only a masked hint is kept here.
  */
 (function (WW) {
   'use strict';
@@ -31,9 +33,14 @@
     { id: 'custom', name: '自定义（OpenAI 兼容）', format: 'openai', baseURL: '', models: [], keyHint: '' }
   ];
 
+  /* Key custody needs this page to be served by tools/serve.py (it only answers its own origin). */
+  function serverAvailable() {
+    return typeof location !== 'undefined' && /^http:$/.test(location.protocol) && /^(127\.0\.0\.1|localhost)$/.test(location.hostname);
+  }
+
   var DEFAULTS = {
     provider: 'anthropic', format: 'anthropic', baseURL: 'https://api.anthropic.com', model: 'claude-opus-5-5',
-    keyMode: 'local', aiLevel: 'full', jsonMode: true, structured: true, temperature: 0.9, timeoutSec: 120,
+    keyMode: serverAvailable() ? 'server' : 'local', serverKeyOrigin: '', serverKeyHint: '', aiLevel: 'full', jsonMode: true, structured: true, temperature: 0.9, timeoutSec: 120,
     useProxy: false, proxyURL: 'http://127.0.0.1:8765', fallbacks: true, sdkURL: SDK_URL, streaming: true
   };
 
@@ -57,6 +64,7 @@
 
   function getKey() {
     var s = getSettings();
+    if (s.keyMode === 'server') return '';
     return s.keyMode === 'session' ? WW.Store.sessionGet('apikey', '') : WW.Store.get('apikey', '');
   }
 
@@ -64,7 +72,11 @@
     var clean = U.deepClone(s);
     delete clean.apiKey;
     WW.Store.set('settings', clean);
-    if (key !== undefined) {
+    if (clean.keyMode === 'server') {
+      /* the server holds it now: drop any plaintext copy this browser still has */
+      WW.Store.remove('apikey');
+      WW.Store.sessionRemove('apikey');
+    } else if (key !== undefined) {
       if (clean.keyMode === 'session') {
         WW.Store.sessionSet('apikey', key);
         WW.Store.remove('apikey');
@@ -83,10 +95,49 @@
     if (s.aiLevel === 'off') return false;
     if (!s.baseURL || !s.model) return false;
     var p = preset(s.provider);
-    return !!(getKey() || (p && p.noKey) || /localhost|127\.0\.0\.1/.test(s.baseURL));
+    var held = s.keyMode === 'server' && serverAvailable() && !!s.serverKeyHint && s.serverKeyOrigin === originOf(s.baseURL);
+    return !!(held || getKey() || (p && p.noKey) || /localhost|127\.0\.0\.1/.test(s.baseURL));
   }
 
   function isOfficialAnthropic(s) { return /^https:\/\/api\.anthropic\.com\/?$/.test(s.baseURL); }
+
+  function originOf(base) {
+    try { return new URL(base).origin; } catch (e) { return ''; }
+  }
+
+  /* custody mode always goes through the serving page's own relay, which injects the key */
+  function viaProxy(s) { return s.keyMode === 'server' || !!s.useProxy; }
+
+  function proxyRoot(s) {
+    if (s.keyMode === 'server' && serverAvailable()) return location.origin;
+    return String(s.proxyURL || DEFAULTS.proxyURL).replace(/\/+$/, '');
+  }
+
+  /* ---------------------------------------------------------------- key custody */
+
+  /* action: 'status' | 'set' | 'delete'. Resolves { stored, hint?, backend, origin }; never returns the key. */
+  function serverKey(action, base, key) {
+    if (!serverAvailable()) return Promise.reject(LLMError('需要通过 tools/serve.py 打开游戏才能托管 Key', 'nokeyserver'));
+    var body = { action: action, base: base };
+    if (action === 'set') body.key = key;
+    return fetch(location.origin + '/api/key', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+    }).then(function (res) {
+      return res.json().catch(function () { return {}; }).then(function (j) {
+        if (!res.ok) throw LLMError(j.error || ('本地服务返回 ' + res.status), 'keyserver', res.status);
+        var s = getSettings();
+        var current = s.serverKeyOrigin === j.origin || originOf(s.baseURL) === j.origin;
+        if (current) {
+          s.serverKeyOrigin = j.origin;
+          s.serverKeyHint = j.stored ? j.hint : '';
+          WW.Store.set('settings', s);
+        }
+        return j;
+      });
+    }, function (e) {
+      throw LLMError('连不上本地服务（tools/serve.py 是否在运行？）：' + e.message, 'keyserver');
+    });
+  }
 
   function b64url(str) {
     var bytes = unescape(encodeURIComponent(str));
@@ -95,7 +146,7 @@
 
   function effectiveBase(s) {
     var base = String(s.baseURL || '').replace(/\/+$/, '');
-    if (s.useProxy && base) return String(s.proxyURL || DEFAULTS.proxyURL).replace(/\/+$/, '') + '/llm-proxy/' + b64url(base);
+    if (viaProxy(s) && base) return proxyRoot(s) + '/llm-proxy/' + b64url(base);
     return base;
   }
 
@@ -196,7 +247,7 @@
       };
       var send = function (compat) {
         var params = build(compat);
-        var useFallback = !compat && s.fallbacks && isOfficialAnthropic(s) && !s.useProxy;
+        var useFallback = !compat && s.fallbacks && isOfficialAnthropic(s) && !viaProxy(s);
         var api = useFallback ? client.beta.messages : client.messages;
         if (useFallback) {
           params.betas = ['server-side-fallback-2026-07-01'];
@@ -376,6 +427,9 @@
     getSettings: getSettings,
     saveSettings: saveSettings,
     getKey: getKey,
+    serverAvailable: serverAvailable,
+    serverKey: serverKey,
+    originOf: originOf,
     isReady: isReady,
     effectiveBase: effectiveBase,
     extractJSON: extractJSON,

@@ -18,8 +18,15 @@
     var baseInput = h('input', { class: 'input', value: s.baseURL, placeholder: 'https://…' });
     var modelInput = h('input', { class: 'input', value: s.model, list: 'ww-models' });
     var modelList = h('datalist', { id: 'ww-models' });
-    var keyInput = h('input', { class: 'input', type: 'password', value: key, placeholder: '粘贴你的 API Key', autocomplete: 'off' });
-    var keyMode = h('select', { class: 'input' }, h('option', { value: 'local', selected: s.keyMode !== 'session' }, '保存在本浏览器（localStorage）'), h('option', { value: 'session', selected: s.keyMode === 'session' }, '仅本次会话（关闭标签页即清除）'));
+    var canHost = WW.LLM.serverAvailable();
+    var keyInput = h('input', { class: 'input', type: 'password', value: s.keyMode === 'server' ? '' : key, placeholder: '粘贴你的 API Key', autocomplete: 'off' });
+    var keyMode = h('select', { class: 'input' },
+      h('option', { value: 'server', selected: s.keyMode === 'server', disabled: !canHost }, '交给本地服务保管（推荐，浏览器不留明文）'),
+      h('option', { value: 'local', selected: s.keyMode === 'local' }, '保存在本浏览器（localStorage，明文）'),
+      h('option', { value: 'session', selected: s.keyMode === 'session' }, '仅本次会话（关闭标签页即清除）'));
+    var keyModeHelp = h('div', { class: 'tiny muted' });
+    var heldKey = null; /* last /api/key answer for the base URL currently in the form */
+    var clearKeyBtn = h('button', { class: 'btn ghost small hidden', type: 'button' }, '清除托管的 Key');
     var aiLevel = h('select', { class: 'input' },
       h('option', { value: 'full', selected: s.aiLevel === 'full' }, '完整：所有内容都由 AI 生成'),
       h('option', { value: 'lite', selected: s.aiLevel === 'lite' }, '精简：只有公文、回合网评、铁拳判定和结案用 AI'),
@@ -58,25 +65,74 @@
       anthropicOnly.classList.toggle('hidden', !isAnthropic);
       openaiOnly.classList.toggle('hidden', isAnthropic);
     };
-    presetSel.addEventListener('change', function () { syncPreset(true); });
+    var BACKENDS = { dpapi: 'Windows DPAPI 加密', 'secret-tool': '系统钥匙串', file: '仅本人可读的文件（0600）', env: '环境变量 WW_API_KEY' };
+    var syncKeyMode = function () {
+      var hosted = keyMode.value === 'server';
+      clearKeyBtn.classList.toggle('hidden', !(hosted && heldKey && heldKey.stored && heldKey.backend !== 'env'));
+      if (!hosted) {
+        keyInput.placeholder = '粘贴你的 API Key';
+        keyModeHelp.textContent = canHost
+          ? 'Key 以明文保存在本浏览器，页面上的任何脚本都能读到。建议改用“交给本地服务保管”。'
+          : 'Key 只保存在你的浏览器里，只会发给你填写的接口地址。用 start.bat / start.sh 启动游戏后可以把 Key 交给本地服务保管。';
+        return;
+      }
+      if (heldKey && heldKey.stored) {
+        keyInput.placeholder = '已托管 ' + heldKey.hint + '（留空则保持不变）';
+        keyModeHelp.textContent = '由本地服务保管（' + (BACKENDS[heldKey.backend] || heldKey.backend) + '），只用于 ' + heldKey.origin + '，浏览器里没有明文。';
+      } else {
+        keyInput.placeholder = '粘贴 Key，保存后交给本地服务保管';
+        keyModeHelp.textContent = heldKey && heldKey.error ? heldKey.error : '保存后 Key 交给本地服务（tools/serve.py）保管，并只用于当前接口地址；浏览器里不再保留明文。';
+      }
+    };
+    var refreshHeld = function () {
+      if (!canHost || keyMode.value !== 'server' || !WW.LLM.originOf(baseInput.value.trim())) { heldKey = null; syncKeyMode(); return Promise.resolve(); }
+      return WW.LLM.serverKey('status', baseInput.value.trim()).then(function (j) { heldKey = j; }, function (e) { heldKey = { stored: false, error: e.message }; }).then(syncKeyMode);
+    };
+    keyMode.addEventListener('change', refreshHeld);
+    baseInput.addEventListener('change', refreshHeld);
+    clearKeyBtn.addEventListener('click', function () {
+      WW.LLM.serverKey('delete', baseInput.value.trim()).then(function () {
+        WW.DOM.toast('已清除托管的 Key', 'good');
+      }, function (e) { WW.DOM.toast(e.message, 'bad'); }).then(refreshHeld);
+    });
+    presetSel.addEventListener('change', function () { syncPreset(true); refreshHeld(); });
     syncPreset(false);
+    refreshHeld();
+
+    /* Save settings; in custody mode hand a newly typed key to the local service first. */
+    var persist = function () {
+      var next = collect();
+      var typed = keyInput.value.trim();
+      if (next.keyMode !== 'server') {
+        WW.LLM.saveSettings(next, typed);
+        return Promise.resolve();
+      }
+      WW.LLM.saveSettings(next);
+      var act = typed ? WW.LLM.serverKey('set', next.baseURL, typed) : WW.LLM.serverKey('status', next.baseURL);
+      return act.then(function (j) {
+        heldKey = j;
+        keyInput.value = '';
+        syncKeyMode();
+      });
+    };
 
     var collect = function () {
       var p = WW.LLM.preset(presetSel.value) || {};
       return {
         provider: presetSel.value, format: p.format || 'openai', baseURL: baseInput.value.trim(), model: modelInput.value.trim(),
-        keyMode: keyMode.value, aiLevel: aiLevel.value, structured: structured.checked, jsonMode: jsonMode.checked,
+        keyMode: keyMode.value, serverKeyOrigin: WW.LLM.getSettings().serverKeyOrigin, serverKeyHint: WW.LLM.getSettings().serverKeyHint, aiLevel: aiLevel.value, structured: structured.checked, jsonMode: jsonMode.checked,
         fallbacks: fallbacks.checked, streaming: streaming.checked, useProxy: useProxy.checked, proxyURL: proxyURL.value.trim(),
         timeoutSec: Number(timeout.value) || 120, temperature: Number(temperature.value), sdkURL: s.sdkURL || WW.LLM.SDK_URL
       };
     };
 
     var testBtn = h('button', { class: 'btn', on: { click: function () {
-      WW.LLM.saveSettings(collect(), keyInput.value.trim());
-      WW.LLM.resetCompat();
       status.textContent = '正在测试连接…';
       testBtn.disabled = true;
-      WW.LLM.test().then(function (r) {
+      persist().then(function () {
+        WW.LLM.resetCompat();
+        return WW.LLM.test();
+      }).then(function (r) {
         status.textContent = '✅ 连接成功：' + r.model + '，耗时 ' + r.ms + ' ms（' + r.msg + '）';
       }, function (e) {
         status.textContent = '❌ 连接失败：' + e.message;
@@ -92,8 +148,8 @@
           field('服务商', presetSel),
           field('模型', h('div', null, modelInput, modelList), 'Claude 默认 claude-opus-5-5；想更快更省可选 claude-haiku-5-5'),
           field('接口地址（Base URL）', baseInput),
-          field('API Key', keyInput, null),
-          field('Key 保存方式', keyMode, 'Key 只保存在你的浏览器里，只会发给你填写的接口地址。'),
+          field('API Key', keyInput, clearKeyBtn),
+          field('Key 保存方式', keyMode, keyModeHelp),
           field('AI 强度', aiLevel)),
         keyHint,
         anthropicOnly,
@@ -114,13 +170,17 @@
         h('div', { class: 'spacer' }),
         testBtn,
         h('button', { class: 'btn primary', on: { click: function () {
-          WW.LLM.saveSettings(collect(), keyInput.value.trim());
-          WW.LLM.resetCompat();
-          WW.Store.set('theme', theme.value);
-          WW.DOM.applyTheme(theme.value);
-          m.close(true);
-          WW.DOM.toast(WW.LLM.isReady() ? '设置已保存，AI 已就绪' : '设置已保存（当前为离线规则模式）', 'good');
-          if (opts.onSave) opts.onSave();
+          persist().then(function () {
+            WW.LLM.resetCompat();
+            WW.Store.set('theme', theme.value);
+            WW.DOM.applyTheme(theme.value);
+            m.close(true);
+            WW.DOM.toast(WW.LLM.isReady() ? '设置已保存，AI 已就绪' : '设置已保存（当前为离线规则模式）', 'good');
+            if (opts.onSave) opts.onSave();
+          }, function (e) {
+            status.textContent = '❌ ' + e.message;
+            WW.DOM.toast(e.message, 'bad');
+          });
         } } }, '保存')
       ]
     });

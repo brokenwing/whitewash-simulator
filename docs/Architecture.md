@@ -299,8 +299,8 @@ flowchart LR
 
 | 键（localStorage，前缀 `ww.`） | 内容 |
 |---|---|
-| `settings` | AI 设置（不含 Key） |
-| `apikey` / sessionStorage `apikey` | API Key（可选“仅本次会话”） |
+| `settings` | AI 设置（不含 Key；托管模式下只有 `serverKeyOrigin` 和掩码 `serverKeyHint`） |
+| `apikey` / sessionStorage `apikey` | API Key（仅“保存在本浏览器”/“仅本次会话”模式；切到托管模式时删除） |
 | `save.<关卡id>` | 进行中的对局（每关独立，互不影响） |
 | `records` | 每关 × 每难度的最佳成绩 |
 | `customLevels` | 编辑器保存或导入的关卡 |
@@ -309,8 +309,8 @@ flowchart LR
 
 - 帖子、关卡文本、AI 输出全部以 `textContent` / 文本节点渲染，没有 `innerHTML`，防止 XSS。
 - 自定义关卡只解析 JSON，不执行代码。
-- API Key 只存在本机浏览器，只发给你填写的接口地址；AI 调用日志不记录 Key。
-- `tools/serve.py` 只监听 `127.0.0.1`，校验 Host 头（只认 `127.0.0.1:<端口>` / `localhost:<端口>`）；转发只接受 POST，且 Origin 必须是本服务页面，`file://` 页面和沙箱 iframe（`Origin: null`）及其他网站一律 403；以 `.` 开头的路径不对外提供；上游只允许 http/https。
+- API Key 默认由 `tools/serve.py` 托管（`tools/keystore.py`：环境变量 / Windows DPAPI / Linux `secret-tool` / 0600 文件），浏览器只留掩码；Key 绑定接口地址的源，代理只把它注入发往该源的请求，且不跟随重定向。选择浏览器保存时存在 localStorage / sessionStorage。无论哪种方式，Key 都只发给你填写的接口地址；AI 调用日志不记录 Key。
+- `tools/serve.py` 只监听 `127.0.0.1`，校验 Host 头（只认 `127.0.0.1:<端口>` / `localhost:<端口>`）；转发和 `/api/key` 只接受 POST，且 Origin 必须是本服务页面（`/api/key` 还要求 `Content-Type: application/json`），`file://` 页面和沙箱 iframe（`Origin: null`）及其他网站一律 403；以 `.` 开头的路径不对外提供；上游只允许 http/https。
 
 ---
 

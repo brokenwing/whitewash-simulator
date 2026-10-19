@@ -13,7 +13,7 @@
 | 服务商 | 预设会自动填好接口地址和常用模型，也可以选“自定义” |
 | 模型 | Claude 默认 `claude-opus-5-5`；想更快更省可以选 `claude-sonnet-5-5` 或 `claude-haiku-5-5` |
 | 接口地址 | Base URL |
-| API Key | 只保存在你的浏览器里；可选“仅本次会话”（关闭标签页即清除） |
+| API Key / Key 保存方式 | **交给本地服务保管**（用 `start.bat` / `start.sh` 启动时的默认选项，推荐）：浏览器不留明文，见第 3 节「Key 托管」；**保存在本浏览器**：localStorage 明文；**仅本次会话**：关闭标签页即清除 |
 | AI 强度 | **完整**：全部任务用 AI；**精简**：只有公文补全/润色/评审、回合网评、铁拳判定、结案报告用 AI，其余走离线规则（更省）；**离线**：不调用 AI |
 | 结构化输出 | Anthropic 格式专用，用 `output_config.format` 强制 JSON；中转不支持时会自动降级 |
 | 拒答时服务端自动回退 | Anthropic 官方地址专用，默认开启 |
@@ -81,6 +81,26 @@ http://127.0.0.1:8765/llm-proxy/<base64url(接口地址)>/chat/completions
 
 > 需要本地代理时，请通过 `http://127.0.0.1:8765/Start.html` 打开游戏，不要直接双击 HTML 文件（`file://`）：后者仍可离线游玩或直连允许跨域的接口，但不能走代理。
 
+### Key 托管
+
+选择“交给本地服务保管”后，Key 不再留在浏览器里（页面上的脚本、浏览器配置文件、开发者工具都看不到明文）：
+
+1. 点「保存」或「测试连接」时，Key 通过 `POST /api/key` 交给 `tools/serve.py`，浏览器随即删除自己保存的副本（包括之前存在 localStorage 里的旧 Key），设置里只留掩码（如 `sk-…abcd`）。
+2. 这一模式下所有请求都走本地代理；代理会去掉浏览器带来的 `Authorization` / `x-api-key`，换成托管的 Key（Anthropic 格式用 `x-api-key`，其余用 `Authorization: Bearer`）。
+3. **Key 绑定接口地址的源**（`scheme://host:port`）：只有发往这个源的请求才会带上它；代理也不跟随重定向（3xx 原样交回浏览器）。所以即使页面被注入了脚本，也只能借代理调用你配置的服务，拿不到 Key、也没法把 Key 发到别的服务器。
+4. 每个接口地址各存一个 Key，切换服务商不用重新填。设置框里的「清除托管的 Key」可以删除当前接口地址的 Key。
+
+Key 的保存方式按系统自动选择（只用 Python 标准库，实现见 `tools/keystore.py`）：
+
+| 方式 | 适用 | 说明 |
+|---|---|---|
+| 环境变量 | 所有系统 | 启动前设置 `WW_API_KEY` 和 `WW_API_BASE`（接口地址，必填，用于绑定）。不落盘、优先级最高，界面里不能修改或清除 |
+| Windows DPAPI | Windows | 加密后存到 `%APPDATA%\whitewash-simulator\keys.json`，只有当前 Windows 用户能解开 |
+| 系统钥匙串 | 装有 `secret-tool` 的 Linux 桌面 | 存进 GNOME Keyring / KWallet；`keys.json` 里只有掩码。钥匙串不可用（如 SSH 无桌面会话）时自动改用下一种 |
+| 0600 文件 | macOS、其他 Linux | 存在 `~/.config/whitewash-simulator/keys.json`（目录 0700、文件 0600），与 `~/.ssh`、`~/.aws/credentials` 同级保护，但文件内是明文 |
+
+托管只防“浏览器侧泄露”。能以你的系统账户运行程序的恶意软件，仍然可以解开 DPAPI 或读取钥匙串，所以服务商那边的额度上限、单独的 Key 和定期轮换依然有必要。
+
 ---
 
 ## 4. 提示词与 JSON 协议
@@ -145,7 +165,7 @@ flowchart TD
 
 ## 7. 隐私
 
-- API Key 只保存在本机浏览器（localStorage 或 sessionStorage），只发送到你填写的接口地址；
+- API Key 默认交给本机的 `tools/serve.py` 保管（见第 3 节「Key 托管」），也可以选择保存在本机浏览器（localStorage 或 sessionStorage）；无论哪种方式，都只发送到你填写的接口地址；
 - 「AI 调用日志」不记录 Key；
 - 游戏内容（关卡设定、局势、你写的公文）会发送给你配置的模型服务。
 

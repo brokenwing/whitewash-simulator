@@ -37,7 +37,7 @@ python tools/serve.py --open
 
 ## 接入 AI
 
-在游戏标题页点「AI 设置」，选择服务商、填写模型和 API Key，点「测试连接」。Key 只保存在你的浏览器里。如果服务商不允许浏览器直接调用（跨域），用 `python tools/serve.py` 启动后勾选“通过本地代理转发请求”。详见 [docs/AI.md](docs/AI.md)。
+在游戏标题页点「AI 设置」，选择服务商、填写模型和 API Key，点「测试连接」。用启动脚本打开游戏时，Key 默认交给本地服务保管（Windows 用 DPAPI 加密，Linux 存系统钥匙串），浏览器里不留明文；双击 HTML 离线打开时则保存在浏览器里。如果服务商不允许浏览器直接调用（跨域），用 `python tools/serve.py` 启动后勾选“通过本地代理转发请求”。详见 [docs/AI.md](docs/AI.md)。
 
 ## 制作关卡
 
@@ -72,7 +72,8 @@ js/ui/                游戏界面
 js/editor/            编辑器
 levels/               内置关卡（manifest.js + 每关一个文件）
 start.bat / start.sh  一键启动（Windows / Linux、macOS）
-tools/serve.py        本地静态服务 + LLM 跨域转发
+tools/serve.py        本地静态服务 + LLM 跨域转发 + API Key 托管
+tools/keystore.py     Key 托管的存储（环境变量 / DPAPI / 钥匙串 / 0600 文件）
 tests/run.js          单元测试与自动平衡模拟
 docs/                 文档
 ```

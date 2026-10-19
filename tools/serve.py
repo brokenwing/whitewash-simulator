@@ -11,6 +11,11 @@
       会被原样转发到 <上游BaseURL>/<路径>，响应（含 SSE 流）原样回传，并附带 CORS 头。
       游戏里在「AI 设置」勾选“通过本地代理转发请求”即可。
 
+Key 托管：POST /api/key（JSON：{"action": "status"|"set"|"delete", "base": 接口地址, "key": …}）
+      把 Key 交给本服务保管（见 keystore.py），接口只回显掩码。之后转发到同一个上游源的请求，
+      会去掉浏览器带来的 Authorization / x-api-key，换成托管的 Key（Anthropic 格式用 x-api-key，
+      其余用 Bearer）。Key 只注入发往它绑定的源的请求，转发也不跟随重定向，所以拿不到明文也带不走。
+
 安全：
   - Host 头必须是 127.0.0.1:<端口> 或 localhost:<端口>，防 DNS 重绑定；
   - 转发只接受 POST，且必须带白名单内的 Origin（即本服务页面）。file:// 页面、沙箱 iframe
@@ -20,6 +25,7 @@
 import argparse
 import base64
 import http.server
+import json
 import os
 import socket
 import socketserver
@@ -30,8 +36,13 @@ import urllib.parse
 import urllib.request
 import webbrowser
 
+import keystore
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PROXY_PREFIX = "/llm-proxy/"
+KEY_API = "/api/key"
+KEY_API_MAX_BODY = 4096
+AUTH_HEADERS = {"authorization", "x-api-key"}
 DROP_REQUEST_HEADERS = {
     "host", "origin", "referer", "cookie", "connection", "content-length", "accept-encoding",
     "sec-fetch-mode", "sec-fetch-site", "sec-fetch-dest", "sec-ch-ua", "sec-ch-ua-mobile", "sec-ch-ua-platform",
@@ -47,10 +58,21 @@ def b64url_decode(text):
     return base64.urlsafe_b64decode(padded.encode("ascii")).decode("utf-8")
 
 
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Hand 3xx back to the browser instead of following it, so an injected key never leaves its origin."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+UPSTREAM = urllib.request.build_opener(NoRedirect)
+
+
 class Handler(http.server.SimpleHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
     allowed_origins = set()
     allowed_hosts = set()
+    keys = None  # keystore.KeyStore, set in main()
 
     extensions_map = dict(http.server.SimpleHTTPRequestHandler.extensions_map)
     extensions_map.update({".js": "text/javascript; charset=utf-8", ".json": "application/json; charset=utf-8",
@@ -102,7 +124,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     def do_OPTIONS(self):
         if not self.host_ok():
             return
-        if not self.path.startswith(PROXY_PREFIX):
+        if not (self.path.startswith(PROXY_PREFIX) or self.path == KEY_API):
             self.send_error(405, "method not allowed")
             return
         if not self.origin_ok():
@@ -116,12 +138,15 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     def do_POST(self):
         if not self.host_ok():
             return
-        if not self.path.startswith(PROXY_PREFIX):
-            self.send_error(405, "only the LLM proxy accepts POST")
+        if not (self.path.startswith(PROXY_PREFIX) or self.path == KEY_API):
+            self.send_error(405, "only the LLM proxy and the key API accept POST")
             return
         if not self.origin_ok():
             return
-        self.proxy("POST")
+        if self.path == KEY_API:
+            self.key_api()
+        else:
+            self.proxy("POST")
 
     def do_GET(self):
         if not self.host_ok():
@@ -150,6 +175,63 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             raise ValueError("unsupported upstream: %r" % base)
         return base + "/" + tail
 
+    # ------------------------------------------------------------------ key API
+    def send_json(self, status, payload):
+        data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        self.send_response(status)
+        self.cors_headers()
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+    def key_api(self):
+        if (self.headers.get("Content-Type") or "").split(";")[0].strip().lower() != "application/json":
+            self.send_json(415, {"error": "需要 application/json"})
+            return
+        length = int(self.headers.get("Content-Length") or 0)
+        if length > KEY_API_MAX_BODY:
+            self.send_json(413, {"error": "请求太大"})
+            return
+        try:
+            req = json.loads(self.rfile.read(length).decode("utf-8") if length else "{}")
+            origin = keystore.normalize_origin(req.get("base"))
+            action = req.get("action")
+            if action == "status":
+                result = self.keys.status(origin)
+            elif action == "set":
+                result = self.keys.set(origin, req.get("key"))
+            elif action == "delete":
+                result = self.keys.delete(origin)
+            else:
+                raise ValueError("未知操作")
+        except PermissionError as exc:
+            self.send_json(409, {"error": str(exc)})
+            return
+        except (ValueError, AttributeError) as exc:  # bad JSON, bad base, bad key
+            self.send_json(400, {"error": str(exc) or "请求格式错误"})
+            return
+        except Exception as exc:  # keyring / DPAPI / disk failure; never echo the key
+            self.send_json(500, {"error": "保存 Key 失败：%s" % type(exc).__name__})
+            return
+        result["origin"] = origin
+        self.send_json(200, result)
+
+    # ------------------------------------------------------------------ proxy
+    def inject_key(self, url, headers):
+        try:
+            key = self.keys.get(keystore.normalize_origin(url))
+        except ValueError:
+            return headers
+        if not key:
+            return headers  # nothing held for this origin: pass the browser's own key through
+        headers = {k: v for k, v in headers.items() if k.lower() not in AUTH_HEADERS}
+        if any(k.lower() == "anthropic-version" for k in headers):
+            headers["x-api-key"] = key
+        else:
+            headers["Authorization"] = "Bearer " + key
+        return headers
+
     def proxy(self, method):
         try:
             url = self.target_url()
@@ -159,9 +241,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         length = int(self.headers.get("Content-Length") or 0)
         body = self.rfile.read(length) if length else None
         headers = {k: v for k, v in self.headers.items() if k.lower() not in DROP_REQUEST_HEADERS}
+        headers = self.inject_key(url, headers)
         req = urllib.request.Request(url, data=body, headers=headers, method=method)
         try:
-            upstream = urllib.request.urlopen(req, timeout=600)
+            upstream = UPSTREAM.open(req, timeout=600)
             status = upstream.status
         except urllib.error.HTTPError as err:
             upstream = err
@@ -215,6 +298,7 @@ def main():
     args = parser.parse_args()
     Handler.allowed_hosts = {"127.0.0.1:%d" % args.port, "localhost:%d" % args.port}
     Handler.allowed_origins = {"http://" + host for host in Handler.allowed_hosts}
+    Handler.keys = keystore.KeyStore()
     try:
         httpd = Server(("127.0.0.1", args.port), Handler)
     except OSError as exc:
@@ -224,6 +308,9 @@ def main():
     print("公关洗地模拟器已启动：%s" % start_url)
     print("关卡编辑器：http://127.0.0.1:%d/LevelEditor.html" % args.port)
     print("LLM 转发前缀：http://127.0.0.1:%d%s<base64url(BaseURL)>/..." % (args.port, PROXY_PREFIX))
+    print("API Key 托管：%s（%s）" % (Handler.keys.preferred_backend(), Handler.keys.path))
+    if Handler.keys.env_origin:
+        print("  环境变量 WW_API_KEY 已绑定到 %s" % Handler.keys.env_origin)
     print("按 Ctrl+C 退出。")
     if args.open:
         threading.Timer(0.5, webbrowser.open, args=(start_url,)).start()
