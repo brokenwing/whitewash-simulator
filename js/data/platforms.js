@@ -7,7 +7,7 @@
     douyin:      { id: 'douyin',      name: '颤音',       short: '颤', color: '#161823', reachMul: 1.3, style: '短视频评论区，爱玩梗、接龙、谐音' },
     xiaohongshu: { id: 'xiaohongshu', name: '小红薯',     short: '薯', color: '#ff2442', reachMul: 1.0, style: '“姐妹们”“避雷”“踩雷”长图文，带个人体验' },
     zhihu:       { id: 'zhihu',       name: '知否',       short: '否', color: '#0066ff', reachMul: 0.9, style: '“谢邀”“利益相关”，长文分析，自带专业身份' },
-    bilibili:    { id: 'bilibili',    name: '币站',        short: '币',  color: '#fb7299', reachMul: 1.0, style: '视频与弹幕，鬼畜、整活、“前方高能”' },
+    bilibili:    { id: 'bilibili',    name: '币站',        short: '币', color: '#fb7299', reachMul: 1.0, style: '视频与弹幕，鬼畜、整活、“前方高能”' },
     tieba:       { id: 'tieba',       name: '铁吧',       short: '铁', color: '#4e6ef2', reachMul: 0.7, style: '楼层对线，阴阳怪气，抽象话' },
     news:        { id: 'news',        name: '新闻客户端', short: '闻', color: '#b8000a', reachMul: 1.5, style: '新闻稿、评论员文章，措辞克制' },
     overseas:    { id: 'overseas',    name: '外网',       short: '外', color: '#5b6470', reachMul: 1.1, immune: true, style: '海外平台与海外媒体转载，删不掉也限不了流' }

@@ -18,6 +18,13 @@
 
   /* ---------------------------------------------------------------- context */
 
+  /* in-game (parody) platform and channel names, e.g. 围脖、颤音……、巨信公众号 */
+  function platformNames() {
+    var names = (D.platformOrder || Object.keys(D.platforms)).map(function (id) { return D.platforms[id].name; })
+      .concat(Object.keys(D.statementChannels).map(function (id) { return D.statementChannels[id].name; }));
+    return names.join('、');
+  }
+
   function baseSystem(game) {
     var key = game.level.id + '|' + game.state.difficulty;
     if (game._sysKey === key && game._sys) return game._sys;
@@ -25,7 +32,7 @@
     var lines = [];
     lines.push('你是讽刺类网络舆情模拟游戏《公关洗地模拟器》的内容引擎。玩家扮演一家危机公关公司，替委托方处理负面舆情。');
     lines.push('【硬性规则】');
-    lines.push('1. 一切人物、品牌、机构均为虚构：不要出现任何真实存在的人名、品牌、媒体、机构名称；不涉及现实政治、民族、宗教、领土话题。监管一律称“有关部门”或“平台”，境外称“外网/海外媒体”。');
+    lines.push('1. 一切人物、品牌、机构均为虚构：不要出现任何真实存在的人名、品牌、媒体、机构名称；不涉及现实政治、民族、宗教、领土话题。监管一律称“有关部门”或“平台”，境外称“外网/海外媒体”。平台只能用游戏里的名字（' + platformNames() + '），不要写出现实中的平台或 App 名称。');
     lines.push('2. 风格：中文互联网语境，网民口吻真实多样（吃瓜、玩梗、阴阳怪气、理中客、较真）。可以讽刺，但不要仇恨言论、人身威胁、色情或对弱势群体的歧视。');
     lines.push('3. 只输出要求的内容（JSON 任务只输出 JSON），不要解释，不要 Markdown 代码块。');
     lines.push('4. 你能看到隐藏的“真相”。真相只用于判断；替网民、客户、KOL 写内容时，他们只知道已公开或已曝光的信息。尚未公开的事实不能写出来——以猜测、暗示的方式猜中它，或抢先否认它（此地无银三百两），都算剧透。');
