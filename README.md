@@ -88,3 +88,9 @@ node tests/run.js --trace smart --level milktea --seed 3
 ```
 
 前者跑完整平衡报告（每格 50 局、四档难度），后者打印单局逐回合的数值与日志。
+
+AI 生成效果评测（需要自备 Key，或用 `--mock` 零成本自检）见 [docs/AI.md 第 8 节](docs/AI.md#8-生成效果评测开发用)：
+
+```bash
+node tests/eval/eval.js --mock
+```

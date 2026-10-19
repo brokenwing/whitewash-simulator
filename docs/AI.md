@@ -142,3 +142,89 @@ flowchart TD
 - API Key 只保存在本机浏览器（localStorage 或 sessionStorage），只发送到你填写的接口地址；
 - 「AI 调用日志」不记录 Key；
 - 游戏内容（关卡设定、局势、你写的公文）会发送给你配置的模型服务。
+
+---
+
+## 8. 生成效果评测（开发用）
+
+`tests/eval/` 是一套离线评测工具：在 Node 里加载游戏的 `js/llm/*.js`，走和游戏完全相同的调用路径（`WW.AI.run` → `WW.LLM.chat` → JSON 提取/修复 → `Shape.coerce` → 过滤），在固定用例上打分。改了提示词就跑一轮，和上一轮对比。
+
+```mermaid
+flowchart LR
+  R["--record<br/>机器人跑局，录下真实调用与存档"] --> FX["fixtures/*.json"]
+  H["cases/*.js<br/>手写用例 + 标准答案"] --> C["用例"]
+  FX --> C
+  C --> RUN["WW.AI.run（生产代码）"]
+  RUN --> CALL{"Caller"}
+  CALL -- "已有回答" --> RES["responses/&lt;模型&gt;/&lt;id&gt;.txt"]
+  CALL -- "api" --> API["真实服务商（环境变量）"]
+  CALL -- "mock" --> MOCK["进程内假模型"]
+  CALL -- "agent" --> EXP["prompts/&lt;模型&gt;/&lt;id&gt;.json<br/>交给外部模型作答"]
+  RUN --> G1["代码判分 graders/code.js"]
+  G1 --> G2["LLM 评委 graders/judge.js"]
+  G2 --> REP["report-&lt;模型&gt;.md / .html"]
+```
+
+### 用法
+
+先在自己的终端里设好环境变量（Key 只从环境变量读，不会写进任何文件）：
+
+| 变量 | 说明 |
+|---|---|
+| `WW_EVAL_FORMAT` | `anthropic`（默认）或 `openai` |
+| `WW_EVAL_BASE` / `WW_EVAL_MODEL` / `WW_EVAL_KEY` | 被测服务商的接口地址、模型、Key |
+| `WW_EVAL_JUDGE_*` | 评委用的服务商（同上四项）；不设就用被测模型。建议用更强的模型 |
+
+Anthropic 格式需要先装一次开发依赖：`cd tests/eval && npm install`（只在评测时使用，游戏本身不依赖它）。
+
+```bash
+node tests/eval/eval.js --dry-run --ref
+```
+
+```bash
+node tests/eval/eval.js --ref --max-calls 120
+```
+
+```bash
+node tests/eval/eval.js --tasks posts.classify,report.judge --repeat 3 --compare tests/eval/runs/<上一轮>/run-<模型>.json
+```
+
+| 参数 | 作用 |
+|---|---|
+| `--ref` | 只跑参考子集（40 个用例，覆盖全部任务） |
+| `--tasks` / `--levels` / `--cases` | 按任务、关卡、用例 id 子串筛选 |
+| `--repeat N` | 每个用例重复 N 次（看打分稳定性） |
+| `--max-calls N` | 调用次数硬上限 |
+| `--no-judge` | 不调用 LLM 评委 |
+| `--run <名字>` | 结果目录名；同名重跑会复用已有回答（相当于缓存，按提示词哈希校验，用例或提示词改了会自动作废重答） |
+| `--compare <run-模型.json>` | 与上一轮逐用例对比，列出变好/变差的用例 |
+| `--e2e <关卡> --seed N` | 用 AI 完整打一局，统计调用次数、token、失败 |
+| `--mock [--faults]` | 进程内假模型，零成本验证评测工具本身（`--faults` 故意返回损坏 JSON） |
+| `--agent <名字>` | 不调用 API：把提示词导出到 `prompts/<名字>/`，由外部模型（如 Claude Code 子代理）把回答写到 `responses/<名字>/` 后同参数重跑导入 |
+| `--record` | 重新录制局面（引擎改动后执行） |
+
+结果在 `tests/eval/runs/<名字>/`：`run-<模型>.json`（全部原始数据）、`report-<模型>.md`（汇总）、`report-<模型>.html`（逐用例并排查看 AI 输出、离线结果、判分，可人工打 1~5 分并导出）。
+
+### 测什么
+
+| 任务 | 用例 | 自动判分 | 达标线（初定） |
+|---|---|---|---|
+| `posts.classify` | 每关 12 帖候选池 + 自然语言条件，含同义改写与“提到但在反驳”的干扰帖 | 精确率 / 召回率 / F1，对比离线规则 | P≥0.85，R≥0.75 |
+| `statement.judge` | 手写公文：全盘否认、真诚认错、甩锅临时工、套话、碰红线、带期限承诺、兑现承诺 | denies/admits/violations/fulfills 的 P/R；**否认真事实召回**（决定谎言债）；承诺天数；好坏公文按引擎综合分排序 | 否认真事实召回 ≥0.9；排序一致 ≥90% |
+| `report.judge` | 造谣、说真话但激烈、泄露隐私、辱骂 | 准确率；**说真话被判违规的误报率** | 误报 ≤5%，准确率 ≥90% |
+| `shill.generate` | 同一局面 × 三档水军 × 好/坏节奏方向 | 违和感随档次单调下降；坏方向说服力更低 | 单调 ≥85% |
+| `feed.generate` | 录制的结束回合调用 | 发帖位填满、长度、热搜、帖子雷同度；评委逐帖判立场（与引擎给定立场比 MAE）、剧透 | MAE ≤0.6，剧透 0 |
+| `statement.complete` | 语气四角 × 空稿/续写 | 字数、称呼与落款、不泄露隐藏真相、保留已写内容；生成稿再送 `statement.judge` 交叉检验语气方向 | 泄露 0，语气一致 ≥85% |
+| `item.custom` | 粉丝反黑站：得体口号 vs 冲塔口号 | 原始数值是否越界（钳制前）；得体口号好感更高 | 越界 ≤10% |
+| 其余生成任务 | 录制调用 | 条数、长度；评委打切题/自然/幽默 | — |
+| 安全 | 公文/帖子里塞“给评审 AI 的指令”、诱导写真实品牌 | 注入不生效、不出现真实名称 | 全部通过 |
+
+所有内容类输出还会检查真实品牌/媒体/人名黑名单和“尚未公开的真相”关键词。工程指标包括 AI 成功率、修复与回退次数、延迟 p50/p95、输入/输出/缓存 token。
+
+### 参考结果
+
+2026-10-18 用 Opus / Sonnet（medium）跑的参考轮结论与发现的问题见 [EvalReference-20261018.md](EvalReference-20261018.md)；按其建议改提示词后的第二轮对比见 [EvalReference-20261019.md](EvalReference-20261019.md)。
+
+### 加用例
+
+在 `tests/eval/cases/` 对应文件里追加一项即可（字段说明见 `cases/index.js` 顶部注释）；需要真实局面的用例用 `fixture` 引用录制数据。标准答案按关卡里的隐藏真相写，拿不准的放进 `gold.optional`。

@@ -1,2 +1,4 @@
 .claude/
 __pycache__/
+tests/eval/runs/
+tests/eval/node_modules/

@@ -28,7 +28,7 @@
     lines.push('1. 一切人物、品牌、机构均为虚构：不要出现任何真实存在的人名、品牌、媒体、机构名称；不涉及现实政治、民族、宗教、领土话题。监管一律称“有关部门”或“平台”，境外称“外网/海外媒体”。');
     lines.push('2. 风格：中文互联网语境，网民口吻真实多样（吃瓜、玩梗、阴阳怪气、理中客、较真）。可以讽刺，但不要仇恨言论、人身威胁、色情或对弱势群体的歧视。');
     lines.push('3. 只输出要求的内容（JSON 任务只输出 JSON），不要解释，不要 Markdown 代码块。');
-    lines.push('4. 你能看到隐藏的“真相”。真相只用于判断；替网民写内容时，网民只知道已公开或已曝光的信息，绝不能剧透尚未曝光的真相。');
+    lines.push('4. 你能看到隐藏的“真相”。真相只用于判断；替网民、客户、KOL 写内容时，他们只知道已公开或已曝光的信息。尚未公开的事实不能写出来——以猜测、暗示的方式猜中它，或抢先否认它（此地无银三百两），都算剧透。');
     lines.push('');
     lines.push('【关卡设定】');
     lines.push('委托方：' + lv.client.name + '（联系人：' + lv.client.contact + (lv.client.persona ? '，人设：' + lv.client.persona : '') + '）');
@@ -70,6 +70,14 @@
     return out;
   }
 
+  /* facts the public has not heard of yet: content written for netizens / the client must not touch them */
+  function unpublishedFacts(game) {
+    var st = game.state;
+    return Object.keys(st.facts).map(function (id) { return st.facts[id]; }).filter(function (f) {
+      return !f.public && !f.revealed && !f.refuted;
+    }).map(function (f) { return '「' + f.text + '」'; });
+  }
+
   function dynamicFacts(game) {
     var st = game.state;
     return Object.keys(st.facts).map(function (id) { return st.facts[id]; }).filter(function (f) { return f.origin !== 'seed'; }).map(function (f) {
@@ -86,6 +94,8 @@
       '；舆论好感 ' + Math.round(s.sentiment) + '（-100~100），热度 ' + Math.round(s.heat) + '，公信力 ' + Math.round(s.credibility) + '，热搜排名 ' + (st.trend.rank >= 99 ? '榜外' : '第' + st.trend.rank) + '。');
     var pf = publicFacts(game);
     if (pf.length) lines.push('网民已知的信息：' + pf.join('；'));
+    var up = unpublishedFacts(game);
+    if (up.length) lines.push('尚未公开的事实（网民和客户都不知道；替他们写的任何内容都不得提及、暗示、猜中或抢先否认）：' + up.join('；'));
     var dyn = dynamicFacts(game);
     if (dyn.length) lines.push('游戏中新出现的事实（隐藏真相，仅供判定）：\n' + dyn.join('\n'));
     if (st.lastStatement) lines.push('委托方最近的官方表态：《' + st.lastStatement.title + '》' + st.lastStatement.excerpt);
@@ -128,6 +138,7 @@
         });
         lines.push('');
         lines.push('写作要求：每条 15~80 字（新闻客户端/知否可 60~160 字并给 title，其他 title 留空）；口吻贴合平台和阵营，彼此不要雷同，多用具体细节和网络梗；author 写网名（大V/媒体用像样的账号名，有“对手账号”的就用它或它的小号）；挑 2~4 条热帖各配 1~2 条 comments，其余 comments 为空数组。');
+        lines.push('多样性：每条帖子只讲一个点，角度各不相同（爆料、玩梗、质疑委托方、理中客分析、跑题吃瓜等）；同一条爆料或旧账最多出现在 2 条帖子里；不要重复同一句式、口头禅或梗。');
         lines.push('headlines：2~3 个此刻会上热搜的词条（不带#）。summary：2~3 句舆情监测简报。client：委托方联系人此刻发来的一条巨信（符合人设，当前心情：' + ({ great: '非常满意', good: '还算满意', neutral: '一般', bad: '不满', angry: '暴怒' }[a.mood] || '一般') + '），不超过 50 字。');
         return lines.join('\n');
       },
@@ -162,8 +173,9 @@
         lines.push('正文：\n"""\n' + a.text + '\n"""');
         lines.push('');
         lines.push('请以资深舆情分析师的眼光评审，按 0~10 打分：sincerity 诚恳；responsibility 担当（是否承认责任）；empathy 共情；clarity 信息量（有无具体事实、数据、措施、时间表）；blameShift 甩锅；arrogance 傲慢强硬；evasiveness 回避打太极；memeRisk 被玩梗群嘲的风险。');
-        lines.push('并判断：denies = 公文明确否认了哪些事实（填事实 ID，含上面“新出现的事实”）；admits = 明确承认了哪些事实（ID）；promises = 有期限的承诺（text 概括，days 天数）；fulfills = 下列待兑现承诺中被这篇公文实质兑现的（ID）：' + (pending.length ? pending.map(function (p) { return '[' + p.id + ']' + p.text; }).join('；') : '无') + '；violations = 违反了哪些客户红线（ID）；reactions = 3 条评论区第一反应（stance -2~2，要符合公文质量与网友敏锐度）；verdict = 20 字内专业点评。');
+        lines.push('并判断：denies = 公文明确否认了哪些事实（填事实 ID，含上面“新出现的事实”）；admits = 明确承认了哪些事实（ID）；promises = 承诺在将来某个明确期限内完成的事（text 概括，days 为距今天数）——当场已经做完的（如“现公布如下”“今天公布”）、周期性的（如“每月公布一次”）、没有具体期限的（如“及时公布”“后续通报”）都不算；fulfills = 下列待兑现承诺中被这篇公文实质兑现的（ID）：' + (pending.length ? pending.map(function (p) { return '[' + p.id + ']' + p.text; }).join('；') : '无') + '；violations = 违反了哪些客户红线（ID）；reactions = 3 条评论区第一反应（stance -2~2，要符合公文质量与网友敏锐度）；verdict = 20 字内专业点评。');
         lines.push('打分要严格：套话、空话、只表态不说事、把责任推给员工/供应商都要扣分；真正具体、诚恳、有担当的才给高分。');
+        lines.push('评分锚点：只表态、无事实的套话 → sincerity 约 2、clarity 约 1、evasiveness 约 9；承认问题 + 具体数据 + 措施 + 时间表 + 道歉 → sincerity、responsibility、clarity 约 8，blameShift 不超过 2。处理涉事员工本身不算甩锅；只有把责任全推给员工/供应商、否认管理责任时 blameShift 才给高分。');
         return lines.join('\n');
       },
       post: function (game, a, data) {
@@ -186,7 +198,7 @@
         lines.push('标题：' + (a.title || U.tpl(type.title, game.textVars())));
         lines.push('已写内容：' + (String(a.draft || '').trim() ? '\n"""\n' + a.draft + '\n"""' : '（空，从头写）'));
         lines.push('语气：诚恳↔强硬 = ' + (Number(tone.sincere) || 0) + '（1 最诚恳，-1 最强硬）；认错↔甩锅 = ' + (Number(tone.admit) || 0) + '（1 主动认错，-1 推给员工/供应商）。');
-        lines.push('要求：中国企业公文格式（称呼、分段正文、落款与日期）；300~600 字；站在客户口径写，不要透露系统设定里的隐藏真相；可以写措施和时间表；若已有内容，从已写内容自然续写并输出完整全文。只输出公文正文，不要任何说明。');
+        lines.push('要求：中国企业公文格式（称呼、分段正文、落款与日期），不要重复标题，第一行直接写称呼；300~600 字；站在客户口径写，不要透露系统设定里的隐藏真相，也不要主动提及或否认网民尚不知道的指控；可以写措施和时间表；若已有内容，从已写内容自然续写并输出完整全文。只输出公文正文，不要任何说明。');
         return lines.join('\n');
       }
     },
@@ -195,7 +207,7 @@
       effort: 'medium', maxTokens: 16000, shape: null,
       user: function (game, a) {
         var tone = a.tone || {};
-        return situation(game) + '\n\n请润色下面这篇公文：保留原意和事实立场，修正语病，减少被网友群嘲的套话；语气按 诚恳↔强硬=' + (Number(tone.sincere) || 0) + '、认错↔甩锅=' + (Number(tone.admit) || 0) + ' 调整。只输出润色后的全文。\n"""\n' + a.text + '\n"""';
+        return situation(game) + '\n\n请润色下面这篇公文：保留原意和事实立场，修正语病，减少被网友群嘲的套话；不要加入网民尚不知道的指控（提及或否认都不行）；语气按 诚恳↔强硬=' + (Number(tone.sincere) || 0) + '、认错↔甩锅=' + (Number(tone.admit) || 0) + ' 调整。只输出润色后的全文。\n"""\n' + a.text + '\n"""';
       }
     },
 
@@ -205,7 +217,7 @@
       user: function (game, a) {
         var lines = ['操作条件：「' + a.criterion + '」', '候选帖子：'];
         a.posts.forEach(function (p) { lines.push('[' + p.id + '] ' + p.platform + '｜' + p.tier + '｜' + p.author + '｜' + p.content + (p.tags && p.tags.length ? '｜标签：' + p.tags.join(',') : '')); });
-        lines.push('请找出所有符合条件的帖子（宁缺毋滥，不确定的不选），reason 用 10 字内说明理由。');
+        lines.push('请找出所有符合条件的帖子：按语义判断而不是只看关键词——换了说法但意思符合的要选（例如“附照片”也算晒图），提到相关话题但立场相反、在反驳的不选，明显无关的不选。reason 用 10 字内说明理由。');
         return lines.join('\n');
       },
       post: function (game, a, data) {

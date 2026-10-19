@@ -1,0 +1,8 @@
+{
+  "name": "whitewash-simulator-eval",
+  "private": true,
+  "description": "Dev-only dependency for running the AI eval against the Anthropic API from Node (the game itself loads the SDK from a CDN).",
+  "dependencies": {
+    "@anthropic-ai/sdk": "0.131.0"
+  }
+}
