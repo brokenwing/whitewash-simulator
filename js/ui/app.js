@@ -58,6 +58,7 @@
             h('button', { class: 'btn', on: { click: function () { WW.GameUI.help(); } } }, '玩法说明'),
             h('button', { class: 'btn', on: { click: importLevel } }, '导入关卡'),
             h('a', { class: 'btn', href: 'LevelEditor.html' }, '关卡编辑器'),
+            WW.LogUI.button(),
             h('button', { class: 'btn accent', on: { click: function () { WW.SettingsUI.open({ onSave: renderHome }); } } }, 'AI 设置'))),
         h('div', { class: 'small ' + (ready ? 'sub' : 'muted') },
           ready ? '🟢 AI 已就绪：' + (WW.LLM.preset(s.provider) || {}).name + ' · ' + s.model + ' · 强度：' + ({ full: '完整', lite: '精简', off: '离线' })[s.aiLevel]

@@ -386,6 +386,7 @@
       if (res && res.error) self.emit('aiError', { task: task, error: res.error });
       return res;
     }).catch(function (e) {
+      WW.Log.error('engine', 'AI 任务 ' + task + ' 执行异常，已回退离线规则：' + (e && e.message || e), e);
       self.emit('aiError', { task: task, error: String(e && e.message || e) });
       return { data: WW.Offline.run(self, task, args), source: 'offline', error: String(e) };
     });
@@ -453,7 +454,7 @@
       self.emit('change', { type: 'action', item: id });
       return { ok: true, text: res.text, detail: res.detail || null, deltas: deltas, cost: useVoucher ? 0 : cost };
     }).catch(function (e) {
-      if (typeof console !== 'undefined') console.error('[WW] action failed', e);
+      WW.Log.error('engine', '行动 ' + id + ' 执行失败：' + (e && e.message || e), e);
       return { ok: false, reason: '执行失败：' + (e && e.message || e) };
     }).then(function (r) {
       self.busy = false;
@@ -569,7 +570,7 @@
       self.emit('change', { type: 'turn' });
       return { ok: true, briefing: st.briefing };
     }).catch(function (e) {
-      if (typeof console !== 'undefined') console.error('[WW] endTurn failed', e);
+      WW.Log.error('engine', '第 ' + st.turn + ' 回合结算失败：' + (e && e.message || e), e);
       return { ok: false, reason: '回合结算失败：' + (e && e.message || e) };
     }).then(function (r) {
       self.busy = false;

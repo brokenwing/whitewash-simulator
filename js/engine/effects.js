@@ -119,7 +119,7 @@
         game.endGame(e.result === 'win' ? 'win' : 'lose', e.title || '', U.tpl(e.text || '', game.textVars()));
         break;
       default:
-        if (typeof console !== 'undefined') console.warn('[WW] unknown effect type', e.type);
+        WW.Log.warn('engine', '未知的效果类型：' + e.type, e);
     }
   }
 

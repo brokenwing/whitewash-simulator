@@ -187,7 +187,7 @@
     var check = function (t, path) {
       if (t.at === 'end' || !t.complete) return;
       var hit = false;
-      try { hit = WW.Cond.evaluate(t.complete, game); } catch (e) { return; }
+      try { hit = WW.Cond.evaluate(t.complete, game); } catch (e) { WW.Log.info('engine', '开局检查时子任务「' + t.title + '」的完成条件无法求值：' + e.message); return; }
       if (hit) out.push({ path: path + '.complete', msg: '子任务「' + t.title + '」开局时就已满足完成条件，会立刻完成。“全程保持 / 零 X 通关”类目标请加 at:"end"，并用 fail 写违规条件' });
     };
     if (lv.objectives.stages[0]) lv.objectives.stages[0].tasks.forEach(function (t, j) { check(t, 'objectives.stages[0].tasks[' + j + ']'); });

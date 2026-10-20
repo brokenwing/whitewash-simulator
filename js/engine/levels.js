@@ -49,7 +49,7 @@
         s.src = base + f;
         s.onload = function () { loaded[f] = true; resolve(true); };
         s.onerror = function () {
-          if (typeof console !== 'undefined') console.error('[WW] 关卡文件加载失败：' + f);
+          WW.Log.error('levels', '关卡文件加载失败：' + f);
           resolve(false);
         };
         document.head.appendChild(s);

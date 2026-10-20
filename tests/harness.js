@@ -13,7 +13,7 @@ const vm = require('vm');
 
 const ROOT = path.resolve(__dirname, '..');
 const FILES = [
-  'js/core/ns.js', 'js/core/util.js', 'js/core/bus.js', 'js/core/storage.js',
+  'js/core/ns.js', 'js/core/log.js', 'js/core/util.js', 'js/core/bus.js', 'js/core/storage.js',
   'js/data/platforms.js', 'js/data/factions.js', 'js/data/personas.js', 'js/data/pools.js', 'js/data/statements.js',
   'js/data/items.js', 'js/data/abilities.js', 'js/data/difficulty.js',
   'js/engine/cond.js', 'js/engine/effects.js', 'js/engine/schema.js', 'js/engine/feed.js', 'js/engine/items.js',

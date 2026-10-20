@@ -654,7 +654,7 @@
 
     /* semantic check on a fresh game; needs the engine (editor, game, tests) and a sound level */
     if (!errors.length && WW.Engine && WW.Objectives && WW.Objectives.lintStart) {
-      try { WW.Objectives.lintStart(lv).forEach(function (w) { W(w.path, w.msg, true); }); } catch (e) { /* a level that cannot start shows up elsewhere */ }
+      try { WW.Objectives.lintStart(lv).forEach(function (w) { W(w.path, w.msg, true); }); } catch (e) { /* a level that cannot start shows up elsewhere */ WW.Log.info('engine', '开局语义检查跳过：' + e.message); }
     }
 
     return { errors: errors, warnings: warnings, level: lv };

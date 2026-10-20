@@ -77,6 +77,7 @@
       h('button', { class: 'btn small ghost', on: { click: openInGame } }, '在游戏中打开'),
       h('button', { class: 'btn small ghost', on: { click: function () { WW.SettingsUI.open(); } } }, 'AI 设置'),
       h('button', { class: 'btn small ghost', on: { click: function () { E.els.root.classList.toggle('show-side'); } } }, '校验/JSON'),
+      WW.LogUI.button('small ghost'),
       h('a', { class: 'btn small ghost', href: 'Start.html' }, '返回游戏'));
   }
 

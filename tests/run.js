@@ -357,6 +357,43 @@ async function unitTests() {
     }
   });
 
+  await test('log: dedupe, cap, scrub, unseen', () => {
+    const { WW: W } = loadContext();
+    const L = W.Log;
+    L.clear();
+    L.error('t', 'boom'); L.error('t', 'boom'); L.warn('t', 'other');
+    const list = L.list();
+    eq(list.length, 2);
+    eq(list[0].count, 2);
+    eq(L.unseen(), 1);
+    L.markSeen();
+    eq(L.unseen(), 0);
+    L.warn('ai', 'bad key sk-ant-abcdef1234567890 rejected', { headers: { 'x-api-key': 'secret-value-123' }, auth: 'Bearer abcdefghijklmnop' });
+    const e = L.list().pop();
+    assert(e.msg.indexOf('abcdef1234567890') < 0, 'sk key leaked: ' + e.msg);
+    assert(e.detail.indexOf('secret-value-123') < 0 && e.detail.indexOf('abcdefghijklmnop') < 0, 'detail leaked: ' + e.detail);
+    for (let i = 0; i < 400; i++) L.info('t', 'n' + i);
+    eq(L.list().length, 300);
+    L.error('t', new Error('with stack'));
+    assert(L.list().pop().stack.indexOf('with stack') >= 0, 'stack kept');
+  });
+
+  await test('log: warn/error persist across reload, info does not', () => {
+    const a = loadContext().WW;
+    a.Log.clear();
+    a.Log.info('t', 'debug only'); a.Log.error('t', 'kept'); a.Log.flush();
+    const saved = a.Store.get('errorLog', []);
+    eq(saved.length, 1);
+    const b = loadContext().WW;
+    b.Store.set('errorLog', saved);
+    b.Log.warn('t', 'new');
+    const list = b.Log.list();
+    eq(list.map(x => x.msg).join(','), 'kept,new');
+    assert(list[0].prev && !list[1].prev, 'prev flag');
+    assert(list[1].id > list[0].id, 'ids stay monotonic');
+    eq(b.Log.unseen(), 0, 'last session errors are not unseen');
+  });
+
   for (const entry of WW.Levels.list()) {
     await test('level validates: ' + entry.id, () => {
       const v = WW.Schema.validate(entry.level);

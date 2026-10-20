@@ -22,7 +22,8 @@
       try {
         list[i](payload, name);
       } catch (e) {
-        if (typeof console !== 'undefined') console.error('[WW] handler for "' + name + '" failed', e);
+        if (WW.Log) WW.Log.error('bus', '事件 "' + name + '" 的处理函数出错：' + (e && e.message || e), e);
+        else if (typeof console !== 'undefined') console.error('[WW] handler for "' + name + '" failed', e);
       }
     }
   };

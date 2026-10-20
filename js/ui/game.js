@@ -128,6 +128,7 @@
   P.attach = function (game) {
     var self = this;
     this.game = game;
+    WW.Log.setContext({ levelId: this.level && this.level.id || '' });
     this.unsub.push(game.on('change', function () { self.render(); }));
     /* 'change' fires while the game is still busy, so buttons rendered then are disabled: refresh once it settles */
     this.unsub.push(game.on('busy', function (b) { self.setBusy(b); if (!b) self.render(); }));
@@ -304,6 +305,7 @@
       h('button', { class: 'btn ghost small', on: { click: function () { self.showLog(); } } }, '日志'),
       h('button', { class: 'btn ghost small', on: { click: function () { WW.SettingsUI.open({ onSave: function () { self.render(); } }); } } }, 'AI 设置'),
       h('button', { class: 'btn ghost small', on: { click: function () { self.showHelp(); } } }, '玩法'),
+      WW.LogUI.button('ghost small'),
       h('button', { class: 'btn ghost small', on: { click: function () {
         WW.DOM.confirm(self.opts.testMode ? '退出试玩？' : '退出到选关？进度已自动保存，可以随时继续。', { ok: '退出' }).then(function (ok) { if (ok) self.exit(); });
       } } }, '退出'),

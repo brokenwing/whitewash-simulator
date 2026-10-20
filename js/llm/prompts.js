@@ -352,6 +352,7 @@
         return { data: data, source: 'ai' };
       });
     }).catch(function (e) {
+      WW.Log.warn('ai', task + ' 已回退离线规则：' + (e && e.message || e));
       return { data: WW.Offline.run(game, task, args), source: 'offline', error: e && e.message || String(e) };
     });
   }

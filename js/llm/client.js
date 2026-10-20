@@ -85,7 +85,7 @@
         WW.Store.sessionRemove('apikey');
       }
     }
-    listeners.forEach(function (fn) { try { fn(getSettings()); } catch (e) { /* ignore */ } });
+    listeners.forEach(function (fn) { try { fn(getSettings()); } catch (e) { WW.Log.warn('ai', '设置变更回调出错：' + e.message, e); } });
   }
 
   function preset(id) { return PRESETS.filter(function (p) { return p.id === id; })[0] || null; }
@@ -258,7 +258,9 @@
 
   /* ---------------------------------------------------------------- logging */
 
-  function pushLog(entry) {
+  function pushLog(entry, err) {
+    if (!entry.ok) WW.Log.warn('ai', entry.task + ' 调用失败：' + entry.error,
+      { aiLogId: entry.id, code: err && err.code || '', status: err && err.status || '', provider: entry.provider, model: entry.model, ms: entry.ms });
     logs.push(entry);
     if (logs.length > 60) logs.shift();
     WW.bus.emit('llm-log', entry);
@@ -531,7 +533,7 @@
     }, function (e) {
       entry.ms = Date.now() - started;
       entry.error = e.message;
-      pushLog(entry);
+      pushLog(entry, e);
       throw e;
     });
   }

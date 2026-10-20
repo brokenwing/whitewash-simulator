@@ -173,12 +173,15 @@
     }, function (e) {
       /* parsed but still has reference errors: keep it, the editor shows the errors to fix by hand */
       if (best) {
+        WW.Log.warn('levelgen', '「' + sec.label + '」段生成后仍有 ' + best.errs.length + ' 处校验错误，已保留待手动修改',
+          best.errs.slice(0, 20).map(function (x) { return x.path + '：' + x.msg; }).join('\n'));
         report.ok = true;
         report.errors = best.errs;
         report.ignored = best.partial.ignored;
         return { draft: best.partial.draft, report: report };
       }
       report.error = e.message;
+      WW.Log.warn('levelgen', '「' + sec.label + '」段生成失败：' + e.message, { code: e.code || '', calls: report.calls, repairs: report.repairs });
       return { draft: draft, report: report };
     });
   }

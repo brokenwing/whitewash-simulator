@@ -55,12 +55,17 @@
 
   /* ---------- toast ---------- */
   var toastBox = null;
-  function toast(text, kind, ms) {
+  /* onClick: optional, makes the toast clickable (it closes on click). Red toasts are also kept in WW.Log. */
+  function toast(text, kind, ms, onClick) {
+    if (kind === 'bad' && WW.Log) WW.Log.warn('ui', text);
     if (!toastBox) {
       toastBox = h('div', { class: 'toasts', role: 'status', 'aria-live': 'polite' });
       document.body.appendChild(toastBox);
     }
-    var t = h('div', { class: 'toast ' + (kind || '') }, text);
+    var t = h('div', { class: 'toast ' + (kind || '') + (onClick ? ' clickable' : ''), on: onClick ? { click: function () {
+      if (t.parentNode) t.parentNode.removeChild(t);
+      onClick();
+    } } : null }, text);
     toastBox.appendChild(t);
     setTimeout(function () { if (t.parentNode) t.parentNode.removeChild(t); }, ms || 4200);
   }

@@ -308,7 +308,14 @@ flowchart LR
 | `customLevels` | 编辑器保存或导入的关卡 |
 | `editorDraft` | 编辑器草稿 |
 | `theme` | 界面主题 |
+| `errorLog` | 异常日志：最近 100 条错误和警告（`js/core/log.js`，写入前脱敏，不含 Key） |
 
+- 异常日志：`js/core/log.js` 紧跟 `ns.js` 加载，不依赖 DOM。它负责三件事：
+  - 监听 `error`（含资源加载失败）和 `unhandledrejection`，并镜像 `console.error/warn`；
+  - 引擎、事件总线、AI 调用、关卡生成、红色 toast 都通过 `WW.Log.error/warn/info(source, msg, detail)` 写入；
+  - 连续相同的记录合并计数，内存最多保留 300 条；warn/error 持久化到 `errorLog`。
+
+  `js/ui/logview.js` 是查看面板，入口是 🐞 按钮和 `Ctrl+Shift+L`。
 - 帖子、关卡文本、AI 输出全部以 `textContent` / 文本节点渲染，没有 `innerHTML`，防止 XSS。
 - 自定义关卡只解析 JSON，不执行代码。
 - API Key 默认由 `tools/serve.py` 托管（`tools/keystore.py`：环境变量 / Windows DPAPI / Linux `secret-tool` / 0600 文件），浏览器只留掩码；Key 绑定接口地址的源，代理只把它注入发往该源的请求，且不跟随重定向。选择浏览器保存时存在 localStorage / sessionStorage。无论哪种方式，Key 都只发给你填写的接口地址；AI 调用日志不记录 Key。

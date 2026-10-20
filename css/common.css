@@ -276,6 +276,26 @@ textarea.input { resize: vertical; min-height: 80px; line-height: 1.6; }
 .toast.warn { border-left-color: var(--warn); }
 .toast.bad { border-left-color: var(--crit); }
 .toast.good { border-left-color: var(--good); }
+.toast.clickable { cursor: pointer; }
+.toast.clickable:hover { border-color: var(--ink-3); }
+
+/* ---------- error log (js/ui/logview.js) ---------- */
+.log-btn { position: relative; }
+.log-btn .log-count {
+  display: inline-block;
+  min-width: 16px;
+  margin-left: 4px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--crit);
+  color: #fff;
+  font-size: 11px;
+  line-height: 16px;
+  text-align: center;
+}
+.log-entry summary { flex-wrap: wrap; }
+.log-entry.prev { opacity: .7; }
+.log-entry .log-src { font-family: var(--mono, monospace); }
 
 /* ---------- tooltip (charts & items) ---------- */
 .tip {
