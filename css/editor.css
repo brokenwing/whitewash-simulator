@@ -79,3 +79,26 @@
 .gen-row.warn { color: var(--serious); }
 .gen-row.bad { color: var(--crit-ink); white-space: pre-wrap; }
 .gen-summary { display: flex; flex-direction: column; gap: 2px; white-space: pre-wrap; }
+
+/* 通关测试 */
+.check-bar { height: 6px; border-radius: 3px; background: var(--panel-2); overflow: hidden; }
+.check-bar .fill { height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+.check-out { display: flex; flex-direction: column; gap: 8px; }
+.check-cards { display: flex; flex-direction: column; gap: 6px; }
+.check-card { padding: 8px 10px; border-radius: 8px; background: var(--panel-2); border-left: 4px solid var(--line); }
+.check-card.link { cursor: pointer; }
+.check-card.red { border-left-color: var(--crit); }
+.check-card.yellow { border-left-color: var(--warn); }
+.check-card.info { border-left-color: var(--accent); }
+.check-card.green { border-left-color: var(--good); }
+.check-card .t { font-weight: 600; }
+.check-card .d { font-size: 12.5px; color: var(--ink-2); margin-top: 2px; }
+.check-out .data-table tr.link, .check-out .data-table th.link { cursor: pointer; }
+.check-out .data-table tr.link:hover { background: var(--panel-2); }
+.check-out .data-table th.on { color: var(--accent); }
+.check-out .data-table td.bad { color: var(--crit-ink); }
+.check-out .data-table td.check-label { text-align: left; max-width: 420px; }
+.check-out .data-table td.check-log { text-align: left; font-size: 12px; color: var(--ink-2); }
+.check-log .k-task { color: var(--good-ink); }
+.check-log .k-opponent, .check-log .k-event { color: var(--serious); }
+.check-trace { margin-top: 6px; overflow-x: auto; }

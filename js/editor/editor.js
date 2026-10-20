@@ -73,6 +73,7 @@
       h('button', { class: 'btn small', on: { click: exportJS } }, '导出 JS'),
       h('button', { class: 'btn small accent', on: { click: function () { WW.EditorAI.openGenerate(setLevel); } } }, '✨ AI 生成关卡'),
       h('button', { class: 'btn small primary', on: { click: testPlay } }, '▶ 试玩'),
+      h('button', { class: 'btn small', on: { click: testCheck } }, '🧪 通关测试'),
       h('button', { class: 'btn small ghost', on: { click: openInGame } }, '在游戏中打开'),
       h('button', { class: 'btn small ghost', on: { click: function () { WW.SettingsUI.open(); } } }, 'AI 设置'),
       h('button', { class: 'btn small ghost', on: { click: function () { E.els.root.classList.toggle('show-side'); } } }, '校验/JSON'),
@@ -225,20 +226,34 @@
     WW.DOM.toast('把 ' + id + '.js 放进 levels/ 目录，并把文件名加到 levels/manifest.js，就成了内置关卡。', 'good', 7000);
   }
 
-  function testPlay() {
+  /* blocks test play / 通关测试 while the level has errors, and shows them */
+  function playable(what) {
     var v = WW.Schema.validate(E.level);
-    if (v.errors.length) {
-      WW.DOM.toast('还有 ' + v.errors.length + ' 个错误，修复后才能试玩', 'bad');
-      E.sideTab = 'check';
-      E.els.root.classList.add('show-side');
-      renderSide();
-      return;
-    }
+    if (!v.errors.length) return true;
+    WW.DOM.toast('还有 ' + v.errors.length + ' 个错误，修复后才能' + what, 'bad');
+    E.sideTab = 'check';
+    E.els.root.classList.add('show-side');
+    renderSide();
+    return false;
+  }
+
+  function testPlay() {
+    if (!playable('试玩')) return;
     var overlay = h('div', { class: 'ed-play' });
     document.body.appendChild(overlay);
     WW.GameUI.mount(overlay, U.deepClone(E.level), {
       testMode: true,
       onExit: function () { overlay.remove(); }
+    });
+  }
+
+  /* offline sweep of many play styles (js/editor/levelcheck.js); a verdict click jumps to its section */
+  function testCheck() {
+    if (!playable('做通关测试')) return;
+    WW.LevelCheckUI.open(U.deepClone(E.level), function (path) {
+      E.section = sectionOfPath(path);
+      renderNav();
+      renderForm();
     });
   }
 

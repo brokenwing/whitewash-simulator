@@ -4,6 +4,8 @@
  *   node tests/run.js                 unit tests + quick balance check (10 seeds)
  *   node tests/run.js --balance 50    full balance report (seeds per strategy)
  *   node tests/run.js --level milktea only one level in the balance report
+ *   node tests/run.js --check milktea [--depth quick|standard|deep] [--intent any|admit|cover]
+ *                                     通关测试 of a level id or a level .json file (same as the editor)
  * Loads the browser scripts into a vm context whose global object doubles as `window`.
  */
 'use strict';
@@ -184,6 +186,44 @@ async function unitTests() {
     assert(w.some((x) => /side\[3\]\.complete .*investigate/.test(x)), 'skill not enabled warned');
     assert(!w.some((x) => /stages\[0\]/.test(x)), 'normal first-stage task not warned');
   });
+
+  await test('Bots.policy: same genome and seed give the same game', async () => {
+    const lv = WW.Levels.get('milktea');
+    const g = WW.Bots.genomes(5, 3)[4];
+    const a = await WW.Bots.playBot(lv, WW.Bots.policy(g), 4, 'regular');
+    const b = await WW.Bots.playBot(lv, WW.Bots.policy(g), 4, 'regular');
+    eq(JSON.stringify(a.state.history), JSON.stringify(b.state.history));
+    assert(WW.Bots.describe(g).split(' · ').length >= 5, WW.Bots.describe(g));
+  });
+
+  await test('LevelCheck: a required task nobody can finish is red, pointing at the task', async () => {
+    const lv = WW.Schema.blank();
+    lv.objectives = { stages: [
+      { id: 's1', title: '一', tasks: [{ id: 'easy', title: '发一篇公文', complete: { var: 'itemUses.statement', op: '>=', value: 1 } }] },
+      { id: 's2', title: '二', tasks: [{ id: 'never', title: '热度降到负数', complete: { var: 'stats.heat', op: '<', value: 0 } }] }
+    ] };
+    const res = await WW.LevelCheck.run(lv, { depth: 'quick', diffs: ['regular'] });
+    const a = WW.LevelCheck.analyze(lv, res, 'any');
+    const red = a.verdicts.filter((v) => v.level === 'red').map((v) => v.title + ' @' + v.path);
+    assert(red.some((x) => /热度降到负数.*@objectives\.stages\[1\]\.tasks\[0\]/.test(x)), red.join('\n'));
+  });
+
+  await test('LevelCheck: a level idle can win is red', async () => {
+    const lv = WW.Schema.blank();
+    lv.objectives = { stages: [{ id: 's1', title: '一', tasks: [{ id: 'wait', title: '撑到第 2 回合', complete: { var: 'turn', op: '>=', value: 2 } }] }] };
+    lv.victory = { condition: { var: 'turn', op: '>=', value: 1 } };
+    const res = await WW.LevelCheck.run(lv, { depth: 'quick', diffs: ['regular'] });
+    const a = WW.LevelCheck.analyze(lv, res, 'any');
+    assert(a.verdicts.some((v) => v.level === 'red' && /什么都不做也能赢/.test(v.title)), JSON.stringify(a.verdicts));
+  });
+
+  for (const entry of WW.Levels.list().filter((e) => e.source === 'builtin')) {
+    await test('LevelCheck: built-in level has no red verdict: ' + entry.id, async () => {
+      const res = await WW.LevelCheck.run(entry.level, { depth: 'quick', diffs: ['regular'] });
+      const red = WW.LevelCheck.analyze(entry.level, res, 'any').verdicts.filter((v) => v.level === 'red');
+      assert(!red.length, red.map((v) => v.title).join('; '));
+    });
+  }
 
   await test('validate flags required tasks that need a skill not unlocked yet at that stage', () => {
     const lv = WW.Schema.blank();
@@ -382,7 +422,36 @@ async function trace(strategy, levelId, diff, seed) {
   console.log('RESULT', game.state.result, game.state.endTitle, JSON.stringify(game.state.final));
 }
 
+/* node tests/run.js --check <level id | file.json> : the editor's 通关测试 in the terminal */
+async function check(target, depth, intent) {
+  const fs = require('fs');
+  const level = fs.existsSync(target) ? JSON.parse(fs.readFileSync(target, 'utf8')) : WW.Levels.get(target);
+  if (!level) throw new Error('找不到关卡：' + target);
+  const res = await WW.LevelCheck.run(level, { depth });
+  const a = WW.LevelCheck.analyze(level, res, intent);
+  const pct = (x) => (x ? Math.round(x.rate * 100) + '%' : '-');
+  console.log('通关测试：' + target + '，' + res.games + ' 局，' + (res.ms / 1000).toFixed(1) + ' 秒（深度 ' + res.depth + '，意图：' + WW.LevelCheck.INTENTS[a.intent] + '）\n');
+  const icon = { red: '✗', yellow: '!', info: 'i', green: '✓' };
+  a.verdicts.forEach((v) => console.log(icon[v.level] + ' ' + v.title + (v.detail ? '\n    ' + v.detail : '') + (v.path ? '\n    → ' + v.path : '')));
+  console.log('');
+  console.table(res.diffs.map((d) => {
+    const b = a.byDiff[d];
+    return { diff: d, best: pct(b.best), bestPlay: b.best ? b.best.entry.label : '', blind: pct(b.bestBlind), admit: pct(b.admitBest), cover: pct(b.coverBest), medianPolicy: Math.round(b.median * 100) + '%' };
+  }));
+  console.table(a.tasks.map((t) => {
+    const row = { task: (t.side ? '支线 ' : t.required ? '必做 ' : '可选 ') + t.title };
+    res.diffs.forEach((d) => { const x = t.byDiff[d]; row[d] = x.games ? x.done + '/' + x.reached + '/' + x.games : '-'; });
+    return row;
+  }));
+  console.log('任务列：完成局数 / 出现局数 / 总局数');
+  process.exitCode = a.verdicts.some((v) => v.level === 'red') ? 2 : 0;
+}
+
 (async () => {
+  if (args.includes('--check')) {
+    await check(argVal('--check', 'tutorial_crayfish'), argVal('--depth', 'standard'), argVal('--intent', 'any'));
+    return;
+  }
   if (args.includes('--trace')) {
     await trace(argVal('--trace', 'balanced'), argVal('--level', null), argVal('--diff', 'regular'), Number(argVal('--seed', 1)));
     return;

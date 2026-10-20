@@ -85,12 +85,13 @@ flowchart TB
 | `js/engine/scoring.js` | 结案评分与评级 |
 | `js/engine/engine.js` | `Game` 类：状态、帮助函数、`act()` / `endTurn()` / 存档 |
 | `js/engine/levels.js` | 关卡注册表、动态加载内置关卡、导入解析、导出脚本 |
+| `js/engine/bots.js` | 离线机器人：固定打法（平衡表用）、照教程卡片操作、参数化打法 `policy(genome)`（编辑器通关测试和 Node 测试共用） |
 | `js/llm/` | AI 设置与适配器（`client.js`）、任务提示词与运行器（`prompts.js`）、输出结构（`shape.js`）、离线规则（`offline.js`） |
 | `js/ui/` | 界面：`app.js` 选关 · `game.js` 作战室 · `statement.js` 公文编辑器 · `items.js` 道具对话框 · `charts.js` 图表 · `settings.js` 设置 · `dom.js` 安全的 DOM 工具 |
-| `js/editor/` | 编辑器：`fields.js` 字段元数据 · `forms.js` 表单渲染 · `editor.js` 主程序 · `levelgen.js` 分段生成关卡（无 DOM，评测也用）· `ai-assist.js` AI 生成弹窗与分区补全 |
+| `js/editor/` | 编辑器：`fields.js` 字段元数据 · `forms.js` 表单渲染 · `editor.js` 主程序 · `levelgen.js` 分段生成关卡（无 DOM，评测也用）· `ai-assist.js` AI 生成弹窗与分区补全 · `levelcheck.js` 通关测试的扫描与体检分析（无 DOM，`--check` 也用）· `levelcheck-ui.js` 通关测试弹窗 |
 | `levels/` | `manifest.js` 内置关卡清单 + 每关一个文件 |
 | `tools/serve.py` | 可选的本地静态服务 + LLM 跨域转发 |
-| `tests/run.js` | Node 测试：单元测试 + 自动平衡模拟 |
+| `tests/run.js` | Node 测试：单元测试 + 自动平衡模拟 + `--check` 通关测试 |
 
 ---
 
@@ -322,4 +323,5 @@ node tests/run.js
 ```
 
 - 单元测试：随机数确定性、模板、深合并、条件 DSL、schema 补全与校验、离线评审、离线分词、存档恢复、输出结构转 JSON Schema、JSON 提取容错，以及**所有内置关卡零校验错误**。
-- 平衡模拟：用 6 种机器人策略（摆烂 / 全水军 / 真诚 / 平衡 / 高手 / 随机）在每关每档难度各跑若干局，统计胜率、平均分、评级分布和失败原因。`--balance 50 --diffs all` 跑完整报告，`--trace smart --level milktea` 打印单局逐回合数值。结果见 [Gameplay.md](Gameplay.md#13-难度曲线与平衡数据)。
+- 平衡模拟：用 6 种机器人策略（摆烂 / 全水军 / 真诚 / 平衡 / 高手 / 随机）在每关每档难度各跑若干局，统计胜率、平均分、评级分布和失败原因。`--balance 50 --diffs all` 跑完整报告，`--trace smart --level milktea` 打印单局逐回合数值。
+- 通关测试：`node tests/run.js --check <关卡 id 或 .json 文件> [--depth quick|standard|deep] [--intent any|admit|cover]`，和编辑器里的「🧪 通关测试」是同一套扫描与判定（见 [Gameplay.md](Gameplay.md#14-通关测试关卡合理性体检)），有红色结论时退出码为 2。结果见 [Gameplay.md](Gameplay.md#13-难度曲线与平衡数据)。

@@ -242,10 +242,10 @@ node tests/eval/eval.js --tasks posts.classify,report.judge --repeat 3 --compare
 ### 一句话生成关卡
 
 ```bash
-node tests/eval/gen.js --premises 0,1,2 --seeds 10
+node tests/eval/gen.js --premises 0,1,2 --depth quick
 ```
 
-用同一组环境变量调用被测模型，按编辑器的分段流程生成关卡（内置 3 个事件设定，也可以用 `--premise "…"` 自己写），然后：逐段打印耗时、token、修复次数；校验并列出错误、提醒和自动整理；能载入的关卡再让 5 种机器人在大手、正式工两档各打 `--seeds` 局，统计胜率和每个子任务的完成率。结果写到 `tests/eval/runs/<名字>/gen-<i>.json`（关卡）和 `gen-<i>.report.json`。
+用同一组环境变量调用被测模型，按编辑器的分段流程生成关卡（内置 3 个事件设定，也可以用 `--premise "…"` 自己写），然后：逐段打印耗时、token、修复次数；校验并列出错误、提醒和自动整理；能载入的关卡再跑一遍编辑器的「🧪 通关测试」（`--depth quick|standard|deep`，`none` 跳过），打印各难度最佳胜率和体检结论。结果写到 `tests/eval/runs/<名字>/gen-<i>.json`（关卡）和 `gen-<i>.report.json`。
 
 ### 测什么
 
