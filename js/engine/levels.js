@@ -57,9 +57,10 @@
     }));
   }
 
-  /* Parse an imported JSON level. Accepts raw JSON or the exported `WW.Levels.register({...});` wrapper. */
+  /* Parse an imported JSON level. Accepts raw JSON or the exported `WW.Levels.register({...});` wrapper,
+     with or without the leading comment toScript() writes. */
   function parseImport(text) {
-    var t = String(text || '').trim();
+    var t = String(text || '').trim().replace(/^(\/\*[\s\S]*?\*\/\s*|\/\/[^\n]*\n\s*)+/, '');
     var m = t.match(/^WW\.Levels\.register\(([\s\S]*)\);?\s*$/);
     if (m) t = m[1];
     var data = JSON.parse(t);

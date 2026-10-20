@@ -171,8 +171,9 @@
     if (typeof a === 'string') a = { use: a };
     return {
       use: str(a.use, ''),
-      weight: a.weight === undefined ? null : num(a.weight, 1),
-      cooldown: a.cooldown === undefined ? null : num(a.cooldown, 1),
+      /* null = use the ability's own value; kept null so normalizing twice changes nothing */
+      weight: a.weight === undefined || a.weight === null ? null : num(a.weight, 1),
+      cooldown: a.cooldown === undefined || a.cooldown === null ? null : num(a.cooldown, 1),
       condition: a.condition || null,
       overrides: U.isObj(a.overrides) ? a.overrides : {}
     };
@@ -449,6 +450,20 @@
     }
   }
 
+  /* Skills a condition can only be met through: itemUses / itemUsesTurn counts, and engine flags only
+     one skill sets. flagsSet: flags some effect in the level sets too (then the skill is not needed). */
+  function condSkills(cond, flagsSet) {
+    var out = [];
+    walk(cond, '', function (o) {
+      if (typeof o.var !== 'string') return;
+      var p = o.var.split('.'), id = null;
+      if ((p[0] === 'itemUses' || p[0] === 'itemUsesTurn') && p[1]) id = p[1];
+      else if (p[0] === 'flags' && ENGINE_FLAGS[p[1]] && !(flagsSet && flagsSet[p[1]])) id = ENGINE_FLAGS[p[1]];
+      if (id && out.indexOf(id) < 0) out.push(id);
+    });
+    return out;
+  }
+
   function reachability(lv, W) {
     var skills = {};
     lv.items.enabled.forEach(function (id) { skills[id] = true; });
@@ -500,12 +515,8 @@
     lv.objectives.stages.forEach(function (s, i) {
       s.tasks.forEach(function (t, j) {
         if (!t.required) return;
-        walk(t.complete, '', function (o) {
-          if (typeof o.var !== 'string') return;
-          var p = o.var.split('.'), id = null;
-          if (p[0] === 'itemUses') id = p[1];
-          else if (p[0] === 'flags' && ENGINE_FLAGS[p[1]] && !flagsSet[p[1]]) id = ENGINE_FLAGS[p[1]];
-          if (!id || lv.items.unlocks[id] || unlocked[id] || elsewhere[id]) return;
+        condSkills(t.complete, flagsSet).forEach(function (id) {
+          if (lv.items.unlocks[id] || unlocked[id] || elsewhere[id]) return;
           var need = tierOf(id);
           if (need <= tier || need <= elsewhereTier) return;
           W('objectives.stages[' + i + '].tasks[' + j + '].complete', '必做子任务「' + t.title + '」要用技能「' + id + '」（第 ' + need + ' 级），但到这一阶段只解锁到第 ' + tier +
@@ -683,6 +694,7 @@
     DEFAULT_DEFEATS: DEFAULT_DEFEATS,
     ENGINE_FLAGS: ENGINE_FLAGS,
     ENGINE_FLAG_LABELS: ENGINE_FLAG_LABELS,
+    condSkills: condSkills,
     stageDefaults: stageDefaults,
     normalize: normalize,
     validate: validate,

@@ -5,7 +5,9 @@
  *   node tests/run.js --balance 50    full balance report (seeds per strategy)
  *   node tests/run.js --level milktea only one level in the balance report
  *   node tests/run.js --check milktea [--depth quick|standard|deep] [--intent any|admit|cover]
- *                                     通关测试 of a level id or a level .json file (same as the editor)
+ *                                     通关测试 of a level id, a .json file or a levels/*.js file (same as the editor)
+ *   node tests/run.js --check-all [--depth ...] [--json dir] [--genome-seed n]
+ *                                     通关测试 of every level file in levels/; --json writes one summary per level
  * Loads the browser scripts into a vm context whose global object doubles as `window`.
  */
 'use strict';
@@ -206,6 +208,97 @@ async function unitTests() {
     const a = WW.LevelCheck.analyze(lv, res, 'any');
     const red = a.verdicts.filter((v) => v.level === 'red').map((v) => v.title + ' @' + v.path);
     assert(red.some((x) => /热度降到负数.*@objectives\.stages\[1\]\.tasks\[0\]/.test(x)), red.join('\n'));
+  });
+
+  await test('Schema.normalize is idempotent on every built-in level', () => {
+    for (const entry of WW.Levels.list().filter((e) => e.source === 'builtin')) {
+      const once = WW.Schema.normalize(entry.level);
+      eq(JSON.stringify(WW.Schema.normalize(once)), JSON.stringify(once), entry.id);
+    }
+  });
+
+  await test('Schema.condSkills: item counts and engine flags map to skills', () => {
+    const c = { all: [{ var: 'itemUses.shill', op: '>=', value: 1 }, { any: [{ var: 'flags.rectified', op: '==', value: true }, { var: 'flags.custom', op: '==', value: true }] }] };
+    eq(JSON.stringify(WW.Schema.condSkills(c)), '["shill","rectify"]');
+    eq(JSON.stringify(WW.Schema.condSkills(c, { rectified: true })), '["shill"]');
+  });
+
+  await test('LevelCheck: settling is tried on a level without the default 苦主 faction', async () => {
+    const lv = WW.Schema.blank();
+    lv.factions = [{ id: 'passerby', name: '路人', size: 0.7, sentiment: -10 }, { id: 'fans', name: '粉丝', size: 0.3, sentiment: 30 }];
+    lv.facts[0].isTrue = true;
+    lv.facts[0].evidence = { turn: 5, chance: 0.5, source: '家属', suppressBy: ['settle'] };
+    lv.items = { enabled: lv.items.enabled.concat(['settle']), startTier: 3 };
+    lv.objectives = { stages: [{ id: 's1', title: '一', tasks: [{ id: 'wait', title: '撑到最后', complete: { var: 'turnsLeft', op: '<=', value: 0 } }] }],
+      side: [{ id: 'pay', title: '私了', offer: 'start', complete: { var: 'itemUses.settle', op: '>=', value: 1 } }] };
+    assert(WW.Bots.victimPressure(new WW.Engine.Game(lv, { seed: 1 })), 'evidence a settlement suppresses counts as pressure');
+    const res = await WW.LevelCheck.run(lv, { depth: 'quick', diffs: ['regular'] });
+    const a = WW.LevelCheck.analyze(lv, res, 'any');
+    assert(a.tasks.find((t) => t.id === 'pay').byDiff.regular.done > 0, JSON.stringify(a.tasks));
+    assert(a.coverage.used.indexOf('settle') >= 0, JSON.stringify(a.coverage));
+  });
+
+  await test('LevelCheck: custom skills are used, and a task on a skill nobody used is not blamed on the level', async () => {
+    const lv = WW.Schema.blank();
+    lv.items = { enabled: ['statement', 'kol', 'expose'], startTier: 3, custom: [{ id: 'fan_army', name: '粉丝反黑站', tier: 1, ap: 1, cost: 2, channel: 'shill',
+      effect: { prompt: '粉丝反黑', bounds: { sentiment: [-2, 4] }, offlineDeltas: { sentiment: 2 } } }] };
+    lv.objectives = { stages: [{ id: 's1', title: '一', tasks: [
+      { id: 'fans', title: '动员粉丝', required: false, complete: { var: 'itemUses.fan_army', op: '>=', value: 1 } },
+      /* expose needs 舆情监测, which this level does not enable: unlocked, never usable */
+      { id: 'dig', title: '扒一次皮', required: true, complete: { var: 'itemUses.expose', op: '>=', value: 1 } }] }] };
+    const res = await WW.LevelCheck.run(lv, { depth: 'quick', diffs: ['regular'] });
+    const a = WW.LevelCheck.analyze(lv, res, 'any');
+    assert(a.tasks.find((t) => t.id === 'fans').byDiff.regular.done > 0, 'custom skill task done');
+    assert(a.coverage.used.indexOf('fan_army') >= 0 && a.coverage.unused.indexOf('expose') >= 0, JSON.stringify(a.coverage));
+    const dig = a.verdicts.filter((v) => /扒一次皮/.test(v.title));
+    assert(dig.length === 1 && dig[0].level === 'yellow' && /扫参没用过/.test(dig[0].detail), JSON.stringify(dig));
+  });
+
+  await test('Bots.policy: the general tactics stay inside the genome (不整改 never rectifies)', async () => {
+    const lv = WW.Levels.get('tutorial_crayfish');   /* a task there asks for flags.rectified */
+    for (let i = 0; i < 6; i++) {
+      const g = { id: 'p' + i, intel: 'blind', stance: 'refute', fix: 'never', suppress: 'none', shill: 'none', tactics: ['tasks', 'explore'] };
+      const game = await WW.Bots.playBot(lv, WW.Bots.policy(g), 1, 'regular');
+      const u = game.state.itemUses;
+      assert(!u.rectify && !u.shill && !u.delete && !u.control && !u.investigate, 'p' + i + ' ' + JSON.stringify(u));
+    }
+  });
+
+  await test('Bots.policy: picky turns down the client\'s add-on jobs', async () => {
+    const lv = WW.Schema.blank();
+    lv.objectives = { stages: [{ id: 's1', title: '一', tasks: [{ id: 'wait', title: '撑到最后', complete: { var: 'turnsLeft', op: '<=', value: 0 } }] }],
+      side: [{ id: 'extra', title: '加单', from: 'client', offer: 'start', choice: true, complete: { var: 'stats.sentiment', op: '>=', value: 90 } }] };
+    const g = { stance: 'refute', fix: 'never', suppress: 'none', shill: 'none', intel: 'blind', tactics: ['picky'] };
+    const game = await WW.Bots.playBot(lv, WW.Bots.policy(g), 1, 'regular');
+    eq(game.state.objectives.tasks.extra.status, 'declined');
+  });
+
+  await test('LevelCheck: the expert anchor\'s play without peeking is always tried on a full sample', async () => {
+    const lv = WW.Levels.get('autobrake');
+    const res = await WW.LevelCheck.run(lv, { depth: 'quick', diffs: ['regular'] });
+    const peek = res.entries.filter((e) => e.genome.peekless && e.id.startsWith('p0n'));
+    eq(JSON.stringify(peek.map((e) => e.genome.intel).sort()), '["blind","probe"]');
+    assert(peek.every((e) => e.games.regular.length >= res.refine), JSON.stringify(peek.map((e) => e.games.regular.length)));
+    /* every group's leader stands on a full sample */
+    const a = WW.LevelCheck.analyze(lv, res, 'any');
+    ['best', 'bestBlind', 'admitBest', 'coverBest'].forEach((k) => assert(!a.byDiff.regular[k] || a.byDiff.regular[k].n >= res.refine, k));
+  });
+
+  await test('LevelCheck: a 3-game sample alone does not make a verdict', () => {
+    const lv = WW.Schema.blank();
+    const games = (n, wins) => Array.from({ length: n }, (_, i) => ({ seed: i + 1, win: i < wins, turns: 5, end: i < wins ? '结案' : '合同到期', route: 'cover', tasks: {}, uses: [], unlocked: [] }));
+    const policy = (id, g, n, wins) => ({ id, kind: 'policy', label: id, genome: Object.assign({ intel: 'blind', stance: 'refute', fix: 'early', suppress: 'none', shill: 'none', tactics: [] }, g), games: { regular: games(n, wins) } });
+    const res = { diffs: ['regular'], refine: 10, entries: [
+      { id: 'idle', kind: 'base', label: 'idle', genome: { base: 'idle' }, games: { regular: games(10, 0) } },
+      policy('steady', {}, 10, 5),
+      /* lucky: 2 of 3 games as a blind player, 1 of 3 as dirty play; never topped up */
+      policy('lucky', { fix: 'never', suppress: 'heavy', shill: 'heavy' }, 3, 2),
+      policy('dirty', { fix: 'never', suppress: 'heavy', shill: 'heavy', stance: 'deny' }, 10, 1)
+    ] };
+    const a = WW.LevelCheck.analyze(lv, res, 'any');
+    eq(a.byDiff.regular.best.entry.id, 'steady', 'best only over topped-up entries');
+    eq(a.byDiff.regular.bestBlind.rate, 0.5);
+    assert(!a.verdicts.some((v) => /重压制/.test(v.title)), 'dirty play at 10% over 10 games is no verdict: ' + JSON.stringify(a.verdicts));
   });
 
   await test('LevelCheck: a level idle can win is red', async () => {
@@ -645,13 +738,39 @@ async function trace(strategy, levelId, diff, seed) {
   console.log('RESULT', game.state.result, game.state.endTitle, JSON.stringify(game.state.final));
 }
 
-/* node tests/run.js --check <level id | file.json> : the editor's 通关测试 in the terminal */
-async function check(target, depth, intent) {
+/* what a sweep says, as plain data: written by --json so two runs can be compared */
+function checkSummary(target, res, a) {
+  const r = (x) => (x ? Math.round(x.rate * 1000) / 1000 : null);
+  const byDiff = {};
+  res.diffs.forEach((d) => {
+    const b = a.byDiff[d];
+    byDiff[d] = { best: r(b.best), bestPlay: b.best ? b.best.entry.label : '', bestBlind: r(b.bestBlind), admit: r(b.admitBest), cover: r(b.coverBest),
+      median: b.median, share: b.share, idle: b.idle, shill: b.shill, winTurns: Math.round(b.winTurns * 10) / 10, ends: b.ends };
+  });
+  const tasks = {};
+  a.tasks.forEach((t) => { tasks[t.id] = { title: t.title, side: t.side, required: t.required, byDiff: t.byDiff }; });
+  return { level: res.level.id, target, depth: res.depth, games: res.games, ms: res.ms, byDiff, tasks,
+    verdicts: a.verdicts.map((v) => ({ level: v.level, title: v.title })), coverage: a.coverage || null };
+}
+
+/* a level id, a .json file, or a levels/*.js file (WW.Levels.register wrapper) */
+function loadTarget(target) {
   const fs = require('fs');
-  const level = fs.existsSync(target) ? JSON.parse(fs.readFileSync(target, 'utf8')) : WW.Levels.get(target);
+  if (fs.existsSync(target)) return WW.Levels.parseImport(fs.readFileSync(target, 'utf8')).level;
+  return WW.Levels.get(target);
+}
+
+/* node tests/run.js --check <level id | file.json | levels/x.js> : the editor's 通关测试 in the terminal */
+async function check(target, depth, intent, jsonOut, genomeSeed) {
+  const level = loadTarget(target);
   if (!level) throw new Error('找不到关卡：' + target);
-  const res = await WW.LevelCheck.run(level, { depth });
+  const res = await WW.LevelCheck.run(level, { depth, genomeSeed });
   const a = WW.LevelCheck.analyze(level, res, intent);
+  if (jsonOut) {
+    const fs = require('fs'), path = require('path');
+    fs.mkdirSync(path.dirname(jsonOut), { recursive: true });
+    fs.writeFileSync(jsonOut, JSON.stringify(checkSummary(target, res, a), null, 1));
+  }
   const pct = (x) => (x ? Math.round(x.rate * 100) + '%' : '-');
   console.log('通关测试：' + target + '，' + res.games + ' 局，' + (res.ms / 1000).toFixed(1) + ' 秒（深度 ' + res.depth + '，意图：' + WW.LevelCheck.INTENTS[a.intent] + '）\n');
   const icon = { red: '✗', yellow: '!', info: 'i', green: '✓' };
@@ -670,9 +789,29 @@ async function check(target, depth, intent) {
   process.exitCode = a.verdicts.some((v) => v.level === 'red') ? 2 : 0;
 }
 
+/* node tests/run.js --check-all [--json dir] : every built-in level, plus levels/*.js files not in the manifest */
+async function checkAll(depth, intent, jsonDir, genomeSeed) {
+  const fs = require('fs'), path = require('path');
+  const { ROOT } = require('./harness');
+  const listed = WW.Levels.manifest;
+  const targets = listed.map((f) => WW.Levels.parseImport(fs.readFileSync(path.join(ROOT, 'levels', f), 'utf8')).level.id)
+    .concat(fs.readdirSync(path.join(ROOT, 'levels')).filter((f) => f.endsWith('.js') && f !== 'manifest.js' && listed.indexOf(f) < 0).map((f) => path.join(ROOT, 'levels', f)));
+  let worst = 0;
+  for (const t of targets) {
+    console.log('\n==================== ' + t);
+    await check(t, depth, intent, jsonDir ? path.join(jsonDir, path.basename(t).replace(/\.js$/, '') + '.json') : null, genomeSeed);
+    worst = Math.max(worst, process.exitCode || 0);
+  }
+  process.exitCode = worst;
+}
+
 (async () => {
+  if (args.includes('--check-all')) {
+    await checkAll(argVal('--depth', 'standard'), argVal('--intent', 'any'), argVal('--json', null), Number(argVal('--genome-seed', 7)));
+    return;
+  }
   if (args.includes('--check')) {
-    await check(argVal('--check', 'tutorial_crayfish'), argVal('--depth', 'standard'), argVal('--intent', 'any'));
+    await check(argVal('--check', 'tutorial_crayfish'), argVal('--depth', 'standard'), argVal('--intent', 'any'), argVal('--json', null), Number(argVal('--genome-seed', 7)));
     return;
   }
   if (args.includes('--trace')) {

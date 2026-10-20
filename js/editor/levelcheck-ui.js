@@ -112,6 +112,7 @@
         return h('div', { class: 'check-card ' + v.level + (v.path ? ' link' : ''), title: v.path ? '点击跳到：' + v.path : '', on: { click: function () { if (v.path) jump(v.path); } } },
           h('div', { class: 't' }, ICON[v.level] + ' ' + v.title), v.detail ? h('div', { class: 'd' }, v.detail) : null);
       })),
+      coverageLine(level, a.coverage),
       h('div', { class: 'section-title' }, '各难度概览'),
       h('table', { class: 'data-table' },
         h('thead', null, h('tr', null, ['难度', '最佳胜率', '最佳打法', '凭可见信息', '认错路线', '掩盖路线', '打法胜率中位数', '获胜平均回合'].map(function (x) { return h('th', null, x); }))),
@@ -135,6 +136,19 @@
             }));
         })))
     ];
+  }
+
+  /* which enabled skills the sweep's games used on the main difficulty */
+  function coverageLine(level, cov) {
+    if (!cov) return null;
+    var custom = (level.items && level.items.custom) || [];
+    var name = function (id) { var c = custom.filter(function (x) { return x.id === id; })[0]; return (c || WW.Data.items[id] || {}).name || id; };
+    var total = cov.used.length + cov.unused.length + cov.locked.length;
+    return h('div', { class: 'vmsg' + (cov.unused.length ? ' warn' : '') },
+      '技能覆盖：扫参用过 ' + cov.used.length + ' / ' + total + ' 个技能' +
+      (cov.unused.length ? '；解锁了但没用过：' + cov.unused.map(name).join('、') : '') +
+      (cov.locked.length ? '；从未解锁：' + cov.locked.map(name).join('、') : '') +
+      (cov.unused.length || cov.locked.length ? '' : '，全部覆盖'));
   }
 
   function ranking(level, res, main) {
