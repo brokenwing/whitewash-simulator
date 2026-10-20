@@ -41,6 +41,17 @@
         open ? h('span', { class: 'chip on' }, open > 1 ? '进行中 ×' + open : '进行中') : null));
   }
 
+  /* the full disclaimer (WW.Data.notice, kept in step with NOTICE / README) */
+  function showNotice() {
+    var m = WW.DOM.modal({
+      title: '声明与许可', wide: true,
+      body: h('div', { class: 'col', style: { gap: '10px' } }, D.notice.full.map(function (p) {
+        return h('div', null, h('b', null, p[0] + '：'), p[1]);
+      })),
+      footer: [h('button', { class: 'btn primary', on: { click: function () { m.close(); } } }, '知道了')]
+    });
+  }
+
   function renderHome() {
     var list = WW.Levels.list();
     var builtin = list.filter(function (e) { return e.source === 'builtin'; });
@@ -68,7 +79,8 @@
         builtin.length ? h('div', { class: 'level-grid' }, builtin.map(card)) : h('div', { class: 'empty' }, '没有找到内置关卡。请确认 levels/ 目录完整。'),
         custom.length ? h('div', { class: 'section-title' }, '自定义关卡（来自编辑器或导入）') : null,
         custom.length ? h('div', { class: 'level-grid' }, custom.map(card)) : null,
-        h('div', { class: 'small muted', style: { marginTop: '28px' } }, '本游戏为虚构讽刺作品，人物、品牌、机构均为虚构。')));
+        h('div', { class: 'small muted', style: { marginTop: '28px' } }, D.notice.short, ' ',
+          h('a', { href: '#', on: { click: function (ev) { ev.preventDefault(); showNotice(); } } }, '声明与许可'))));
     WW.DOM.replace(root, view);
     document.title = '公关洗地模拟器';
   }

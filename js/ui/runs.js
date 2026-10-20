@@ -216,17 +216,20 @@
     var out = h('pre', { class: 'story-text' }, story ? story.text : '');
     var status = h('div', { class: 'small muted' }, story ? '已生成于 ' + when(story.at) + (story.source === 'offline' ? '（离线模板）' : '') : (WW.AI.enabledFor('story.write') ? '将由 AI 撰写，长篇可能需要一两分钟。' : '当前为离线模式，会用模板生成简版；在「AI 设置」里配置接口后可由 AI 撰写。'));
     var genBtn = h('button', { class: 'btn primary', on: { click: generate } }, story ? '重新生成' : '生成');
-    var copyBtn = h('button', { class: 'btn', disabled: !story, on: { click: function () { copyText(out.textContent); } } }, '复制');
+    /* what leaves the game carries the disclaimer (WW.Data.notice.story) */
+    var exported = function () { return WW.Data.notice.story + '\n\n' + out.textContent; };
+    var copyBtn = h('button', { class: 'btn', disabled: !story, on: { click: function () { copyText(exported()); } } }, '复制');
     var dlBtn = h('button', { class: 'btn', disabled: !story, on: { click: function () {
       var t = titleOf(meta).title;
-      WW.DOM.download(('爽文-' + t + '-' + new Date(meta.createdAt || Date.now()).toISOString().slice(0, 10)).replace(/[\\/:*?"<>|\s]+/g, '_') + '.md', out.textContent, 'text/markdown;charset=utf-8');
+      WW.DOM.download(('爽文-' + t + '-' + new Date(meta.createdAt || Date.now()).toISOString().slice(0, 10)).replace(/[\\/:*?"<>|\s]+/g, '_') + '.md', exported(), 'text/markdown;charset=utf-8');
     } } }, '下载 .md');
 
     var m = WW.DOM.modal({
       title: '✍️ 写成爽文 · ' + titleOf(meta).title, wide: true,
       body: h('div', { class: 'col story-dialog', style: { gap: '10px' } },
         h('div', { class: 'row wrap', style: { gap: '12px', alignItems: 'center' } }, lens, h('label', { class: 'row', style: { gap: '6px', alignItems: 'center' } }, '主角', hero)),
-        status, out),
+        status, out,
+        h('div', { class: 'small muted' }, WW.Data.notice.ai + '复制和下载的文本开头会附上这段说明。')),
       footer: [copyBtn, dlBtn, genBtn],
       onClose: function () { if (busy) WW.DOM.toast('生成仍在后台进行，完成后会自动存进档案', 'warn'); }
     });

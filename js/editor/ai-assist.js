@@ -35,6 +35,7 @@
       title: '✨ AI 一句话生成关卡', wide: true, maskClose: false,
       body: h('div', { class: 'col', style: { gap: '10px' } },
         h('div', { class: 'small sub' }, 'AI 会分 ' + WW.LevelGen.SECTIONS.length + ' 段写出关卡草稿，每段写完都会校验，出错会自动修一次。生成后载入编辑器，你可以继续修改。参考格式见 docs/LevelFormat.md。'),
+        h('div', { class: 'small muted' }, '请写虚构的人物、品牌和事件，不要针对现实中的个人。' + WW.Data.notice.ai),
         h('div', { class: 'field' }, h('label', null, '事件设定'), premise),
         h('div', { class: 'row' }, h('div', { class: 'field grow' }, h('label', null, '回合数'), turns), h('div', { class: 'field grow' }, h('label', null, '预算（万元）'), budget)),
         log, summary),

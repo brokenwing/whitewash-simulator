@@ -1,0 +1,32 @@
+公关洗地模拟器 (Whitewash Simulator)
+Copyright 2026 brokenwing
+
+本项目的代码以 MIT 许可授权（见 LICENSE）；
+关卡、文档与故事样本等文字内容以 CC BY 4.0 授权（见 LICENSE-CONTENT）。
+
+声明（分发本项目或其衍生作品时，请一并保留本文件）：
+
+1. 本项目是讽刺性的模拟游戏。游戏中的人物、品牌、组织和事件均为虚构；
+   涉及的现实事件、机构名称与网络平台名称，只作为戏仿与讽刺的背景，
+   与现实中的任何个人或组织无关，也不代表作者对其的评价。
+2. 游戏用夸张的方式展示"删帖、控评、水军、甩锅"等公关手段及其代价，
+   目的是讽刺与反思，不是教学，也不鼓励任何人在现实中操纵舆论、
+   散布谣言、侵犯他人权益或规避监管。
+3. 游戏中的 AI 功能（生成帖子、关卡、爽文等）调用的是使用者自行配置的
+   第三方模型服务。生成内容由模型产生，可能不准确或不当，仅供娱乐；
+   使用者须遵守所用模型服务的条款与当地法律法规，
+   并对自己生成、保存、发布或传播的内容自行负责。
+4. 本项目按"原样"提供，不提供任何明示或默示的保证。在适用法律允许的
+   最大范围内，作者和贡献者不对因使用本项目或其生成内容而产生的任何
+   损失或责任负责（另见 LICENSE 中的免责条款）。
+5. 基于本项目修改、再发布或部署的版本，由其发布者或运营者负责，
+   与原作者无关。修改版请勿冒用"公关洗地模拟器"的名称或原作者的名义。
+
+Disclaimer (English summary): This is a satirical simulation game. All
+characters, brands, organizations and events are fictional; any references to
+real events, institutions or platforms are parody. It does not encourage
+manipulating public opinion in real life. AI features call third-party models
+configured by the user; generated content is for entertainment only and the
+user is solely responsible for what they generate, publish or share. Provided
+"AS IS" without warranty; see LICENSE. Modified or deployed
+versions are the responsibility of whoever distributes or operates them.
