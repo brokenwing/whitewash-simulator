@@ -107,3 +107,6 @@
 .check-log .k-task { color: var(--good-ink); }
 .check-log .k-opponent, .check-log .k-event { color: var(--serious); }
 .check-trace { margin-top: 6px; overflow-x: auto; }
+.tune-bar { display: flex; align-items: center; gap: 6px 12px; flex-wrap: wrap; padding: 8px 10px; border: 1px dashed var(--axis); border-radius: 10px; }
+.tune-bar label { display: inline-flex; align-items: center; gap: 4px; }
+.tune-bar .tune-num { width: 64px; padding: 3px 6px; }

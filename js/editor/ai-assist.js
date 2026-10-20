@@ -19,7 +19,8 @@
 
   /* Section-by-section generation (js/editor/levelgen.js): one row per section with its state; a
      failed section keeps the finished ones and can be retried alone. */
-  function openGenerate(setLevel) {
+  /* tuneLevel(): opens 通关测试 on the loaded draft and starts 自动调优 (offline, no model) */
+  function openGenerate(setLevel, tuneLevel) {
     if (needAI()) return;
     var premise = h('textarea', { class: 'input', rows: 3, placeholder: '一句话描述事件，例如：网红火锅店被曝使用回收锅底油，老板坚称是同行陷害' });
     var turns = h('input', { class: 'input', type: 'number', value: 8, min: 4, max: 12 });
@@ -79,7 +80,10 @@
         WW.DOM.replace(summary,
           h('div', null, '生成完成：' + v.errors.length + ' 个错误，' + v.warnings.length + ' 条提醒。'),
           res.fixes.length ? h('div', { class: 'sub' }, '自动整理：' + res.fixes.join('；')) : null,
-          v.errors.concat(v.warnings).slice(0, 6).map(function (e) { return h('div', { class: 'sub' }, (v.errors.indexOf(e) >= 0 ? '✗ ' : '! ') + e.path + '：' + e.msg); }));
+          v.errors.concat(v.warnings).slice(0, 6).map(function (e) { return h('div', { class: 'sub' }, (v.errors.indexOf(e) >= 0 ? '✗ ' : '! ') + e.path + '：' + e.msg); }),
+          tuneLevel && !v.errors.length ? h('div', { class: 'row', style: { marginTop: '6px', alignItems: 'center', gap: '8px' } },
+            h('button', { class: 'btn small', on: { click: function () { m.close(); tuneLevel(); } } }, '🔧 通关测试并自动调优'),
+            h('span', { class: 'sub' }, '离线模拟，不调用 AI：先补杠杆，不行再放宽门槛，改动确认后才写进关卡。')) : null);
         setLevel(res.level, '已载入 AI 生成的关卡草稿' + (v.errors.length ? '（请修复 ' + v.errors.length + ' 个错误）' : ''));
         go.textContent = '重新生成';
         cancel.textContent = '完成';

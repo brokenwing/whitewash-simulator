@@ -71,7 +71,7 @@
       h('button', { class: 'btn small', on: { click: saveToBrowser } }, '保存到浏览器'),
       h('button', { class: 'btn small', on: { click: exportJSON } }, '导出 JSON'),
       h('button', { class: 'btn small', on: { click: exportJS } }, '导出 JS'),
-      h('button', { class: 'btn small accent', on: { click: function () { WW.EditorAI.openGenerate(setLevel); } } }, '✨ AI 生成关卡'),
+      h('button', { class: 'btn small accent', on: { click: function () { WW.EditorAI.openGenerate(setLevel, function () { testCheck(true); }); } } }, '✨ AI 生成关卡'),
       h('button', { class: 'btn small primary', on: { click: testPlay } }, '▶ 试玩'),
       h('button', { class: 'btn small', on: { click: testCheck } }, '🧪 通关测试'),
       h('button', { class: 'btn small ghost', on: { click: openInGame } }, '在游戏中打开'),
@@ -265,7 +265,8 @@
   }
 
   /* offline sweep of many play styles (js/editor/levelcheck.js); a verdict click jumps to its section */
-  function testCheck() {
+  /* tune === true: start 自动调优 right away (from the AI generation dialog) */
+  function testCheck(tune) {
     if (!playable('做通关测试')) return;
     WW.LevelCheckUI.open(U.deepClone(E.level), function (path) {
       E.section = sectionOfPath(path);
@@ -274,7 +275,12 @@
     }, function (fix) {
       applyFix(fix, '');
       return U.deepClone(E.level);
-    });
+    }, function (level) {
+      var section = E.section;
+      setLevel(level, '已采用自动调优的修改');
+      E.section = section;
+      renderAll();
+    }, { tune: tune === true });
   }
 
   function openInGame() {

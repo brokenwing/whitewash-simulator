@@ -8,6 +8,8 @@
  *                                     通关测试 of a level id, a .json file or a levels/*.js file (same as the editor)
  *   node tests/run.js --check-all [--depth ...] [--json dir] [--genome-seed n]
  *                                     通关测试 of every level file in levels/; --json writes one summary per level
+ *   node tests/run.js --tune moon_hoax [--out file.json] [--min-win 0.3] [--min-task 0.1] [--rounds 10]
+ *                                     自动调优 (js/editor/leveltune.js); writes the tuned level only with --out
  * Loads the browser scripts into a vm context whose global object doubles as `window`.
  */
 'use strict';
@@ -328,6 +330,28 @@ async function unitTests() {
     assert(to > n.from && to <= n.best, 'the new threshold still asks for progress: ' + JSON.stringify([to, n]));
     eq(rally.fixes[0].patch[0].path, 'objectives.stages[0].tasks[1].complete.value');
     assert(crush && /没往目标方向动过/.test(crush.detail) && !crush.fixes, JSON.stringify(crush));
+  });
+
+  await test('LevelTune: a lever first, a looser threshold only after; the input level is left alone', async () => {
+    const { lv } = feas((l) => {
+      l.factions = [{ id: 'crowd', name: '路过群众', size: 0.6, sentiment: -10 }, { id: 'zeal', name: '热血青年', size: 0.4, sentiment: 10 }];
+      l.objectives.stages[0].tasks.push({ id: 'rally', title: '唤醒青年', required: true, complete: { var: 'faction.zeal', op: '>=', value: 90 } });
+    });
+    const before = JSON.stringify(lv);
+    const res = await WW.LevelTune.run(lv, { maxRounds: 6 });
+    eq(JSON.stringify(lv), before, 'input untouched');
+    assert(res.changes.length && res.changes[0].kind === 'lever' && /专属技能/.test(res.changes[0].label), JSON.stringify(res.changes));
+    const firstThreshold = res.changes.findIndex((c) => c.kind === 'threshold');
+    assert(firstThreshold < 0 || firstThreshold > 0, 'threshold comes after the lever');
+    const t = res.end.tasks.rally;
+    assert(t.rate >= 0.1, 'rally finished often enough: ' + JSON.stringify(t) + ' ' + JSON.stringify(res.rounds));
+    eq(WW.Schema.validate(res.level).errors.length, 0);
+    assert(res.before && res.after, 'before / after recheck');
+  });
+
+  await test('LevelTune: a level that is already done is not changed', async () => {
+    const res = await WW.LevelTune.run(WW.Levels.get('tutorial_crayfish'));
+    assert(res.met && !res.changes.length && !res.rounds.length && !res.before, JSON.stringify(res.left));
   });
 
   await test('Schema.condSkills: item counts and engine flags map to skills', () => {
@@ -902,6 +926,39 @@ async function check(target, depth, intent, jsonOut, genomeSeed) {
   process.exitCode = a.verdicts.some((v) => v.level === 'red') ? 2 : 0;
 }
 
+/* node tests/run.js --tune <level> [--out file.json] [--min-win 0.3] [--min-task 0.1] [--rounds 10] :
+   自动调优 in the terminal; the tuned level is written only with --out, the source is never touched */
+async function tune(target, outFile, o) {
+  const level = loadTarget(target);
+  if (!level) throw new Error('找不到关卡：' + target);
+  const started = Date.now();
+  const res = await WW.LevelTune.run(level, o, (ev) => {
+    if (ev.type === 'try') console.log('第 ' + ev.round + ' 轮尝试：' + ev.tries.map((x) => '「' + x.task + '」' + x.label).join('；'));
+    if (ev.type === 'round') ev.row.tries.forEach((x) => console.log('   ' + (x.kept ? '✓ 保留' : '✗ 撤销') + ' 「' + x.task + '」' + x.label + '：' + x.from + ' → ' + x.to));
+    if (ev.type === 'final') console.log('标准深度复测调优前后……');
+  });
+  console.log('\n自动调优：' + target + '，' + res.rounds.length + ' 轮，' + ((Date.now() - started) / 1000).toFixed(1) + ' 秒，' + (res.met ? '已达标' : '未达标') + '\n');
+  res.changes.forEach((c) => console.log((c.kind === 'threshold' ? '⚠ ' : '🔧 ') + '「' + c.task + '」' + c.label + '（' + c.from + ' → ' + c.to + '）\n    ' + c.desc));
+  if (!res.changes.length) console.log('没有修改。');
+  res.left.forEach((l) => console.log('✗ ' + l.title + '\n    ' + l.why));
+  if (res.before) {
+    const pct = (x) => Math.round(x * 100) + '%';
+    console.table(res.after.diffs.map((d) => ({ diff: d, before: pct(res.before.best[d]), after: pct(res.after.best[d]) })));
+    console.table(res.after.tasks.map((t, i) => {
+      const row = { task: (t.side ? '支线 ' : t.required ? '必做 ' : '可选 ') + t.title };
+      const b = res.before.tasks[i].byDiff[res.after.main], a = t.byDiff[res.after.main];
+      row.before = b.done + '/' + b.reached;
+      row.after = a.done + '/' + a.reached;
+      return row;
+    }));
+  }
+  if (outFile) {
+    require('fs').writeFileSync(outFile, JSON.stringify(res.level, null, 2));
+    console.log('已写出：' + outFile);
+  }
+  process.exitCode = res.met ? 0 : 2;
+}
+
 /* node tests/run.js --check-all [--json dir] : every built-in level, plus levels/*.js files not in the manifest */
 async function checkAll(depth, intent, jsonDir, genomeSeed) {
   const fs = require('fs'), path = require('path');
@@ -925,6 +982,14 @@ async function checkAll(depth, intent, jsonDir, genomeSeed) {
   }
   if (args.includes('--check')) {
     await check(argVal('--check', 'tutorial_crayfish'), argVal('--depth', 'standard'), argVal('--intent', 'any'), argVal('--json', null), Number(argVal('--genome-seed', 7)));
+    return;
+  }
+  if (args.includes('--tune')) {
+    const d = WW.LevelTune.DEFAULTS;
+    await tune(argVal('--tune', 'tutorial_crayfish'), argVal('--out', null), {
+      minWin: Number(argVal('--min-win', d.minWin)), minTask: Number(argVal('--min-task', d.minTask)),
+      maxRounds: Number(argVal('--rounds', d.maxRounds)), genomeSeed: Number(argVal('--genome-seed', d.genomeSeed))
+    });
     return;
   }
   if (args.includes('--trace')) {

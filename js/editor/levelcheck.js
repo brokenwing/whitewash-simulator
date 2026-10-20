@@ -511,5 +511,5 @@
     return { history: st.history, log: st.log, result: st.result, endTitle: st.endTitle, final: st.final };
   }
 
-  WW.LevelCheck = { DEPTHS: DEPTHS, INTENTS: INTENTS, run: run, analyze: analyze, trace: trace, rate: rate };
+  WW.LevelCheck = { DEPTHS: DEPTHS, INTENTS: INTENTS, DIFF_ORDER: DIFF_ORDER, TUNABLE: TUNABLE, run: run, analyze: analyze, trace: trace, rate: rate, leavesOf: leavesOf };
 })(window.WW);
