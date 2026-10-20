@@ -330,6 +330,65 @@
     return { posts: posts, headlines: headlines, summary: summary(game), client: client };
   };
 
+  /* ------------------------------------------------------------ 写成爽文：按回合套模板 */
+  tasks['story.write'] = function (game, a) {
+    var st = game.state;
+    var P = D.pools.story;
+    var long = a.length === 'long';
+    var rng = U.rng(U.hash(String(st.seed) + '|story|' + (a.length || 'short')));
+    var vars = U.deepMerge(game.textVars(), { hero: a.hero || '老K' });
+    var say = function (list) { return U.tpl(rng.pick(list) || '', vars); };
+    var out = ['# ' + say(P.titles), ''];
+    var chapterNo = 0;
+    var NUM = '一二三四五六七八九十';
+    var chapter = function (name) { out.push('## 第' + NUM[chapterNo] + '章 ' + name, ''); chapterNo += 1; };
+
+    chapter(P.chapters[0]);
+    out.push(say(P.openers));
+    out.push('“' + game.level.incident.summary + '”——这就是摆在' + vars.hero + '面前的烂摊子。');
+    out.push(say(P.pressure) + ' ' + say(P.calm), '');
+
+    var byTurn = {};
+    st.log.forEach(function (l) { (byTurn[l.turn] = byTurn[l.turn] || []).push(l); });
+    (st.chronicle || []).forEach(function (c) { byTurn[c.turn] = byTurn[c.turn] || []; });
+    var turns = Object.keys(byTurn).map(Number).sort(function (x, y) { return x - y; });
+    var middle = P.chapters.slice(1, P.chapters.length - 1);
+    var nChap = Math.min(middle.length, long ? Math.max(2, Math.ceil(turns.length / 2)) : 2);
+    var per = Math.max(1, Math.ceil(turns.length / nChap));
+    var stmts = st.statements || [];
+    var chron = st.chronicle || [];
+    turns.forEach(function (t, i) {
+      if (i % per === 0) chapter(middle[Math.min(middle.length - 1, Math.floor(i / per))]);
+      var para = ['【' + game.turnLabel(t) + '】'];
+      byTurn[t].forEach(function (l) {
+        if (l.kind === 'action') para.push(say(P.act) + l.text + (long || rng.chance(0.5) ? say(P.actAfter) : ''));
+        else if (l.kind === 'opponent') para.push(say(P.opp) + l.text + say(P.oppAfter));
+        else if (l.kind === 'truth') para.push(say(P.truth) + l.text);
+        else if (long && (l.kind === 'event' || l.kind === 'task')) para.push(l.text + '。');
+      });
+      if (long) stmts.filter(function (x) { return x.turn === t; }).forEach(function (x) {
+        para.push('那份《' + x.title + '》一发出，评论区炸了锅：“' + x.text.slice(0, 60) + (x.text.length > 60 ? '……' : '') + '”');
+      });
+      var c = chron.filter(function (x) { return x.turn === t; })[0];
+      if (c && c.headlines && c.headlines.length) para.push('热搜上挂着：#' + c.headlines[0] + '#。');
+      if (para.length > 1) {
+        para.push(say(P.netizen));
+        out.push(para.join(''), '');
+      }
+    });
+
+    chapter(P.chapters[P.chapters.length - 1]);
+    if (!st.finished) out.push('故事还没完。' + vars.hero + '看了一眼日程表：第 ' + st.turn + ' 回合，局势未定。');
+    else {
+      var f = st.final || {};
+      out.push(st.endTitle + '。' + (st.endText || ''));
+      out.push(say(st.result === 'win' ? P.win : P.lose));
+      out.push('最终评级：' + (f.grade || '-') + '，得分 ' + (f.score !== undefined ? f.score : '-') + '。');
+    }
+    if (a.ending && a.ending.epilogue) out.push('', '——' + a.ending.epilogue);
+    return { text: out.join('\n') };
+  };
+
   function run(game, task, args) {
     var fn = tasks[task];
     if (!fn) throw new Error('No offline implementation for task ' + task);

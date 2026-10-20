@@ -411,3 +411,40 @@
 .data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .data-table th, .data-table td { padding: 4px 8px; border-bottom: 1px solid var(--line); text-align: right; font-variant-numeric: tabular-nums; }
 .data-table th:first-child, .data-table td:first-child { text-align: left; }
+
+/* ---------- 未完成存档（委托书）与档案馆 ---------- */
+.resume-list { margin: 4px 0 8px; display: flex; flex-direction: column; gap: 6px; }
+.resume-list p { margin: 0; }
+.resume-row {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 6px 10px;
+  border: 1px dashed #c9c3b6; border-radius: 6px; background: rgba(255, 255, 255, .6); font-size: 14px;
+}
+.resume-row > span { flex: 1; min-width: 180px; }
+.resume-row .btn { color: #1b1b1a; background: #fff; border-color: #d8d2c5; }
+.runs-filter { gap: 6px; margin: 10px 0; }
+.runs-list { display: flex; flex-direction: column; gap: 8px; }
+.run-row {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 10px 12px;
+  border: 1px solid var(--line); border-radius: 10px; background: var(--panel);
+}
+.run-row.open { border-color: var(--accent); }
+.run-cover { font-size: 26px; flex: none; }
+.run-main { flex: 1; min-width: 200px; }
+.run-title { font-weight: 700; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.run-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.run-star.on { color: #e0a400; }
+.run-detail .result-head { margin-bottom: 4px; }
+.run-timeline { display: flex; flex-direction: column; gap: 14px; }
+.run-turn { border-left: 3px solid var(--line); padding-left: 12px; display: flex; flex-direction: column; gap: 6px; }
+.run-turn-h { font-weight: 700; font-size: 14px; }
+.run-doc { margin: 6px 0; }
+.run-doc summary { cursor: pointer; font-size: 14px; }
+.run-doc .report-box { margin-top: 6px; }
+.story-text {
+  white-space: pre-wrap; word-break: break-word; font-family: inherit; font-size: 14.5px; line-height: 1.85;
+  background: var(--panel-2); border-radius: 10px; padding: 12px 14px; margin: 0; max-height: 60vh; overflow: auto;
+}
+.story-text:empty { display: none; }
+@media (max-width: 600px) {
+  .run-actions { width: 100%; }
+}

@@ -124,6 +124,10 @@
         st.counters.statementsTurn += 1;
         st.recent.playerContent += 1;
         st.lastStatement = { turn: st.turn, title: title, type: type.name, excerpt: text.slice(0, 160), q: U.round(q, 1), postId: post.id };
+        /* full text kept for the run record / story (older saves lack the list) */
+        st.statements = st.statements || [];
+        st.statements.push({ turn: st.turn, title: title, type: type.name, channel: ch.name, text: text.slice(0, 600), q: U.round(q, 1), verdict: j.verdict || '' });
+        if (st.statements.length > 20) st.statements.shift();
         return {
           text: '发布《' + title + '》（' + type.name + '）：' + (j.verdict || '评审完成'),
           detail: { kind: 'statement', scores: s, q: U.round(q, 1), verdict: j.verdict, notes: notes, postId: post.id, source: res.source }

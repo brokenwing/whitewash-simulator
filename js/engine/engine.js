@@ -68,7 +68,7 @@
         regulated: 0, manipTurn: 0
       },
       recent: { playerContent: 0, deleted: 0, suppressed: 0 },
-      log: [], messages: [], history: [], postQueue: [], briefing: null, firedEvents: {},
+      log: [], messages: [], history: [], chronicle: [], statements: [], postQueue: [], briefing: null, firedEvents: {},
       turnActions: [], lastTurnActions: [], turnStart: null, lastStatement: null, lastPressure: 0
     };
     this.state = st;
@@ -220,6 +220,19 @@
     st.log.push(entry);
     if (st.log.length > 400) st.log.shift();
     this.emit('log', entry);
+  };
+
+  /* one entry per finished turn for the run record / story: what the player did and what happened next */
+  P.chronicle = function (turn, briefing, actions) {
+    var st = this.state;
+    st.chronicle = st.chronicle || [];
+    st.chronicle.push({
+      turn: turn, label: this.turnLabel(turn), actions: actions || [],
+      lines: (briefing.lines || []).filter(function (l) { return l && l.text; }).map(function (l) { return { kind: l.kind, text: l.text }; }),
+      summary: briefing.summary || '', headlines: briefing.headlines || [], deltas: briefing.deltas || null,
+      end: st.finished ? st.endTitle : ''
+    });
+    if (st.chronicle.length > 60) st.chronicle.shift();
   };
 
   P.message = function (from, text, mood) {
@@ -508,6 +521,7 @@
     if (st.finished || !st.objectives.mainComplete) return false;
     st.finishedEarly = true;
     this.endGame('win', '提前结案', '主任务全部完成，客户同意提前结案。', '');
+    this.chronicle(st.turn, { lines: [], summary: '', headlines: [], deltas: null }, st.turnActions.map(function (a) { return a.text; }));
     this.emit('change', { type: 'end' });
     return true;
   };
@@ -531,6 +545,8 @@
     this.emit('busy', true);
     var lines = [];
     var before = this.snapshot();
+    var startTurn = st.turn;
+    var actionsDone = st.turnActions.map(function (a) { return a.text; });
     var feedDone = Promise.resolve().then(function () {
       WW.Opponents.act(self, lines);
       if (self.checkEnd()) return;
@@ -570,6 +586,7 @@
         turn: st.turn, lines: lines, deltas: self.diffSnapshot(before),
         summary: st.briefingSummary || '', headlines: st.trend.list.filter(function (t) { return t.turn === st.turn; }).map(function (t) { return t.title; })
       };
+      self.chronicle(startTurn, st.briefing, actionsDone);
       st.rngState = self.rng.s;
       self.emit('turn', st.briefing);
       self.emit('change', { type: 'turn' });

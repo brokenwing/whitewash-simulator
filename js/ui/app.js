@@ -1,6 +1,6 @@
 /*
  * Start.html controller: title screen with the order board (built-in + custom levels),
- * JSON import, settings, help, and routing into GameUI.
+ * JSON import, settings, help, the run archive (WW.RunsUI) and routing into GameUI.
  */
 (function (WW) {
   'use strict';
@@ -22,7 +22,7 @@
   function card(entry) {
     var lv = WW.Schema.normalize(entry.level);
     var best = bestOf(lv.id);
-    var run = WW.Store.loadRun(lv.id);
+    var open = WW.Store.runsOf(lv.id, true).length;
     return h('div', { class: 'order-card', tabindex: 0, role: 'button', 'aria-label': lv.meta.title, on: {
       click: function () { play(entry.level); },
       keydown: function (e) { if (e.key === 'Enter') play(entry.level); }
@@ -38,7 +38,7 @@
         h('span', { class: 'chip' }, U.fmtMoney(lv.contract.budget)),
         lv.opponents.length ? h('span', { class: 'chip' }, '对手 ×' + lv.opponents.length) : null,
         entry.source === 'custom' ? h('span', { class: 'chip' }, '自定义') : null,
-        run && run.state && !run.state.finished ? h('span', { class: 'chip on' }, '进行中') : null));
+        open ? h('span', { class: 'chip on' }, open > 1 ? '进行中 ×' + open : '进行中') : null));
   }
 
   function renderHome() {
@@ -57,6 +57,7 @@
           h('div', { class: 'title-actions' },
             h('button', { class: 'btn', on: { click: function () { WW.GameUI.help(); } } }, '玩法说明'),
             h('button', { class: 'btn', on: { click: importLevel } }, '导入关卡'),
+            h('button', { class: 'btn', on: { click: openRuns } }, '🗂 存档'),
             h('a', { class: 'btn', href: 'LevelEditor.html' }, '关卡编辑器'),
             WW.LogUI.button(),
             h('button', { class: 'btn accent', on: { click: function () { WW.SettingsUI.open({ onSave: renderHome }); } } }, 'AI 设置'))),
@@ -70,6 +71,12 @@
         h('div', { class: 'small muted', style: { marginTop: '28px' } }, '本游戏为虚构讽刺作品，人物、品牌、机构均为虚构。')));
     WW.DOM.replace(root, view);
     document.title = '公关洗地模拟器';
+  }
+
+  function openRuns() {
+    WW.RunsUI.open({ onResume: function (level, data, runId) {
+      WW.GameUI.mount(root, level, { onExit: renderHome, resume: data, runId: runId });
+    } });
   }
 
   function play(level) {

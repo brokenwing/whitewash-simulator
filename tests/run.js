@@ -338,6 +338,94 @@ async function unitTests() {
     assert(regular.itemStatus('rectify').locked, 'regular still gates tiers');
   });
 
+  /* in-memory localStorage that throws once `limit` characters are stored */
+  function fakeStorage(limit) {
+    const data = new Map();
+    const size = () => { let n = 0; for (const [k, v] of data) n += k.length + v.length; return n; };
+    return {
+      get length() { return data.size; },
+      key: (i) => Array.from(data.keys())[i] || null,
+      getItem: (k) => (data.has(k) ? data.get(k) : null),
+      setItem: (k, v) => {
+        const prev = data.get(k);
+        data.set(k, String(v));
+        if (size() > limit) { if (prev === undefined) data.delete(k); else data.set(k, prev); throw new Error('QuotaExceededError'); }
+      },
+      removeItem: (k) => { data.delete(k); }
+    };
+  }
+  const runData = (levelId, turn, finished, pad) => ({ v: 1, levelId, savedAt: 1, state: { levelId, turn, difficulty: 'regular', finished, result: finished ? 'win' : null, final: finished ? { grade: 'B', score: 60 } : null, pad: pad || '' } });
+
+  await test('runs: several saves per level, star, delete, newest first', async () => {
+    const S = loadContext().WW.Store;
+    assert(S.saveRunById('r1', runData('lv', 2, false), { levelTitle: '甲' }).ok);
+    assert(S.saveRunById('r2', runData('lv', 5, true)).ok);
+    assert(S.saveRunById('r3', runData('other', 1, false)).ok);
+    eq(S.runs().length, 3);
+    eq(S.runsOf('lv').length, 2);
+    eq(S.runsOf('lv', true).map((m) => m.id).join(','), 'r1');
+    await new Promise((r) => setTimeout(r, 5));
+    S.saveRunById('r1', runData('lv', 3, false));
+    eq(S.runs()[0].id, 'r1', 'updated run first');
+    eq(S.runMeta('r1').turn, 3);
+    eq(S.runMeta('r1').levelTitle, '甲', 'title kept across saves');
+    eq(S.runMeta('r2').grade, 'B');
+    S.starRun('r2', true);
+    assert(S.runMeta('r2').starred);
+    S.patchRun('r2', { story: { text: 'x' } });
+    assert(S.runMeta('r2').hasStory && S.runMeta('r2').starred, 'patch keeps star, marks story');
+    eq(S.loadRunById('r2').story.text, 'x');
+    S.deleteRun('r3');
+    eq(S.runs().length, 2);
+    eq(S.loadRunById('r3'), null);
+  });
+
+  await test('runs: old single save per level is migrated', () => {
+    const S = loadContext({ extraGlobals: { localStorage: fakeStorage(1e7) } }).WW.Store;
+    S.set('save.milktea', runData('milktea', 4, false));
+    const list = S.runs();
+    eq(list.length, 1);
+    eq(list[0].levelId, 'milktea');
+    eq(list[0].turn, 4);
+    eq(S.get('save.milktea', null), null, 'old key removed');
+    eq(S.loadRunById(list[0].id).state.turn, 4);
+  });
+
+  await test('runs: full storage drops oldest un-starred finished runs, never open ones', async () => {
+    const S = loadContext({ extraGlobals: { localStorage: fakeStorage(6800) } }).WW.Store;
+    const pad = 'x'.repeat(1200);
+    const tick = () => new Promise((r) => setTimeout(r, 3));
+    assert(S.saveRunById('open', runData('lv', 1, false, pad)).ok); await tick();
+    assert(S.saveRunById('old', runData('lv', 8, true, pad)).ok); await tick();
+    assert(S.saveRunById('star', runData('lv', 8, true, pad)).ok); await tick();
+    S.starRun('star', true);
+    const r = S.saveRunById('new', runData('lv', 2, false, pad + pad));
+    assert(r.ok, 'saved after pruning');
+    eq(r.pruned.map((m) => m.id).join(','), 'old');
+    eq(S.runs().map((m) => m.id).sort().join(','), 'new,open,star');
+    const r2 = S.saveRunById('huge', runData('lv', 2, false, 'y'.repeat(9000)));
+    assert(!r2.ok, 'too big even after pruning');
+    assert(S.runMeta('open') && S.runMeta('star'), 'open and starred runs survive');
+  });
+
+  await test('chronicle + statements recorded; offline story covers every turn', async () => {
+    const game = await playBot(WW.Levels.get('milktea'), 'balanced', 11, 'regular');
+    const st = game.state;
+    assert(st.chronicle.length >= st.turn - 1, 'chronicle ' + st.chronicle.length + ' for ' + st.turn + ' turns');
+    assert(st.chronicle.every((c) => Array.isArray(c.actions) && Array.isArray(c.lines)), 'chronicle shape');
+    if (st.counters.statements) assert(st.statements.length && st.statements[0].text.length > 10, 'statement text kept');
+    for (const length of ['short', 'long']) {
+      const out = WW.Offline.run(game, 'story.write', { length, hero: '阿白' }).text;
+      assert(out.indexOf('# ') === 0 && out.indexOf('## 第一章') > 0, 'markdown chapters');
+      assert(out.indexOf('阿白') >= 0, 'hero named');
+      const turns = new Set(st.log.filter((l) => l.kind === 'action').map((l) => l.turn));
+      for (const t of turns) assert(out.indexOf('【' + game.turnLabel(t) + '】') >= 0, 'turn ' + t + ' missing in ' + length);
+    }
+    eq(WW.AI.renumberChapters('# 书\n## 第一章 甲\n正文 第四章\n## 第四章 乙\n##第四章 丙\n## 第4章 丁'), '# 书\n## 第一章 甲\n正文 第四章\n## 第二章 乙\n## 第三章 丙\n## 第四章 丁');
+    const material = WW.AI.storyMaterial(game, {});
+    assert(material.indexOf('【经过（按回合）】') >= 0 && material.indexOf(st.endTitle) >= 0, 'story material');
+  });
+
   await test('retired 地狱 saves resume as 金牌公关', () => {
     const lv = WW.Levels.get('tutorial_crayfish');
     const save = JSON.parse(JSON.stringify(new WW.Engine.Game(lv, { seed: 6, difficulty: 'gold' }).serialize()));

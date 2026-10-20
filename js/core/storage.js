@@ -58,6 +58,81 @@
     delete memory[kind][key];
   }
 
+  /* all keys (without PREFIX) currently stored under `kind` */
+  function keys(kind) {
+    var s = backend(kind);
+    var out = [];
+    try {
+      if (s) {
+        for (var i = 0; i < s.length; i++) {
+          var k = s.key(i);
+          if (k && k.indexOf(PREFIX) === 0) out.push(k.slice(PREFIX.length));
+        }
+        return out;
+      }
+    } catch (e) { /* fall through */ }
+    return Object.keys(memory[kind]);
+  }
+
+  /* ---- runs (每局一份存档): index 'runs' = [meta], body 'run.<id>' = serialized game + extras ---- */
+  var FINISHED_CAP = 30;
+  var migrated = false;
+
+  function runIndex() {
+    var list = read('local', 'runs', []);
+    return Array.isArray(list) ? list.filter(function (m) { return m && m.id; }) : [];
+  }
+
+  function metaFrom(id, data, prev, extra) {
+    var st = (data && data.state) || {};
+    var f = st.final || {};
+    var now = Date.now();
+    var m = {
+      id: id, levelId: st.levelId || (data && data.levelId) || (prev && prev.levelId) || '',
+      levelTitle: '', cover: '', turns: 0,
+      difficulty: st.difficulty || '', turn: st.turn || 0, finished: !!st.finished, result: st.result || null,
+      grade: f.grade || '', score: f.score !== undefined ? f.score : null,
+      createdAt: prev ? prev.createdAt : now, updatedAt: now,
+      starred: prev ? !!prev.starred : false, hasStory: !!(data && data.story)
+    };
+    if (prev) ['levelTitle', 'cover', 'turns'].forEach(function (k) { if (prev[k]) m[k] = prev[k]; });
+    if (extra) Object.keys(extra).forEach(function (k) { if (extra[k] !== undefined) m[k] = extra[k]; });
+    return m;
+  }
+
+  /* oldest finished, un-starred runs first; never `keepId` */
+  function pruneCandidates(list, keepId) {
+    return list.filter(function (m) { return m.finished && !m.starred && m.id !== keepId; })
+      .sort(function (a, b) { return (a.updatedAt || 0) - (b.updatedAt || 0); });
+  }
+
+  function dropRun(list, id) {
+    remove('local', 'run.' + id);
+    return list.filter(function (m) { return m.id !== id; });
+  }
+
+  /* move pre-multi-save data ('save.<levelId>') into runs; the old key is removed only once the copy is stored */
+  function migrate() {
+    if (migrated) return;
+    migrated = true;
+    var list = runIndex();
+    var changed = false;
+    keys('local').forEach(function (k) {
+      if (k.indexOf('save.') !== 0) return;
+      var data = read('local', k, null);
+      if (!data || !data.state) { remove('local', k); return; }
+      var id = WW.U.uid('run');
+      if (!write('local', 'run.' + id, data)) return;
+      var m = metaFrom(id, data, null, { levelId: data.state.levelId || k.slice(5) });
+      m.createdAt = m.updatedAt = data.savedAt || Date.now();
+      list.push(m);
+      if (!write('local', 'runs', list)) { list.pop(); remove('local', 'run.' + id); return; }
+      remove('local', k);
+      changed = true;
+    });
+    return changed;
+  }
+
   var Store = {
     available: function () { return !!backend('local'); },
     get: function (key, def) { return read('local', key, def); },
@@ -103,10 +178,77 @@
       return false;
     },
 
-    /* ---- in-progress run, keyed by level id so levels never share data ---- */
-    loadRun: function (levelId) { return read('local', 'save.' + levelId, null); },
-    saveRun: function (levelId, data) { return write('local', 'save.' + levelId, data); },
-    clearRun: function (levelId) { remove('local', 'save.' + levelId); }
+    /* ---- runs: every game started is its own save; finished games stay as records ---- */
+    /* newest first */
+    runs: function () {
+      migrate();
+      return runIndex().sort(function (a, b) { return (b.updatedAt || 0) - (a.updatedAt || 0); });
+    },
+    runsOf: function (levelId, unfinishedOnly) {
+      return Store.runs().filter(function (m) { return m.levelId === levelId && (!unfinishedOnly || !m.finished); });
+    },
+    runMeta: function (id) {
+      return Store.runs().filter(function (m) { return m.id === id; })[0] || null;
+    },
+    loadRunById: function (id) { return read('local', 'run.' + id, null); },
+    /*
+     * Store a run body and refresh its index entry (`meta` adds levelTitle / cover / turns).
+     * When storage is full, the oldest finished un-starred runs are deleted until it fits.
+     * -> { ok, pruned: [meta] }
+     */
+    saveRunById: function (id, data, meta) {
+      migrate();
+      var list = runIndex();
+      var prev = list.filter(function (m) { return m.id === id; })[0] || null;
+      var pruned = [];
+      var ok = write('local', 'run.' + id, data);
+      while (!ok) {
+        var victim = pruneCandidates(list, id)[0];
+        if (!victim) break;
+        list = dropRun(list, victim.id);
+        pruned.push(victim);
+        ok = write('local', 'run.' + id, data);
+      }
+      if (!ok) {
+        write('local', 'runs', list);
+        return { ok: false, pruned: pruned };
+      }
+      var m = metaFrom(id, data, prev, meta);
+      list = list.filter(function (x) { return x.id !== id; });
+      list.push(m);
+      if (m.finished) {
+        var extra = pruneCandidates(list, id);
+        var over = list.filter(function (x) { return x.finished; }).length - FINISHED_CAP;
+        for (var i = 0; i < over && i < extra.length; i++) {
+          list = dropRun(list, extra[i].id);
+          pruned.push(extra[i]);
+        }
+      }
+      while (!write('local', 'runs', list)) {
+        var v2 = pruneCandidates(list, id)[0];
+        if (!v2) break;
+        list = dropRun(list, v2.id);
+        pruned.push(v2);
+      }
+      return { ok: true, pruned: pruned };
+    },
+    /* merge top-level fields (ending, story ...) into a stored run */
+    patchRun: function (id, fields) {
+      var data = Store.loadRunById(id);
+      if (!data) return { ok: false, pruned: [] };
+      Object.keys(fields).forEach(function (k) { data[k] = fields[k]; });
+      var prev = Store.runMeta(id);
+      return Store.saveRunById(id, data, prev ? { updatedAt: prev.updatedAt } : null);
+    },
+    deleteRun: function (id) {
+      write('local', 'runs', dropRun(runIndex(), id));
+    },
+    starRun: function (id, on) {
+      var list = runIndex();
+      list.forEach(function (m) { if (m.id === id) m.starred = !!on; });
+      write('local', 'runs', list);
+    },
+    FINISHED_CAP: FINISHED_CAP
   };
 
   WW.Store = Store;

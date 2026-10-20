@@ -126,7 +126,10 @@ Key 的保存方式按系统自动选择（只用 Python 标准库，实现见 `
 | `report.judge` | 召唤铁拳（目标帖未关联事实时） | `violation`、`type`、`confidence`、`reason` | 隐私/辱骂/传言关键词 |
 | `item.custom` | 自定义 AI 道具 | `narration`、`deltas{5 个数值}`、`posts[]` | 关卡给的固定数值或范围的 60% 位置 |
 | `ending.report` | 结案 | `report`、`epilogue` | 统计数据拼报告 + 评级尾声 |
+| `story.write` | 结案页 / 存档里点「✍️ 写成爽文」 | 纯文本 Markdown（`# 书名` + `## 第X章`），短篇约 1500 字 / 长篇约 4000 字，可流式 | 按回合套 `pools.story` 句式模板 |
 | `level.generate.<段>` / `level.fill` | 编辑器 | 分 5 段生成的关卡草稿（见下）/ 追加的列表项 | 不可用（需要配置 AI） |
+
+`story.write` 的素材由 `WW.AI.storyMaterial` 汇总：结局与评级、按回合的日志（`state.log`）和每回合的局势摘要/热搜/数值变化（`state.chronicle`）、发布的公文全文（`state.statements`）、客户来信、结案报告。它在精简强度下也会调用 AI；输出长，超时放宽到 300 秒（`timeoutSec`），`maxTokens` 由调用方按篇幅传入。
 
 **一句话生成关卡**（`js/editor/levelgen.js`，编辑器弹窗和 `tests/eval/gen.js` 共用）按依赖顺序分 5 段写：骨架（委托方、事件、事实、阵营）→ 网民画像与初始帖子 → 对手 → 技能、主任务与支线 → 脚本事件。每段只附教程关里对应的那一段作格式参考，并带上前面已写好的部分（只能引用其中的 id）。每段的输出先解析（含括号修复），再和已写好的部分合并校验；解析失败或有引用错误，就把错误和出错位置附近的片段交回模型修一次，还不行再从头重写一次这一段。写完的段会保留，失败的段可以单独重试。最后用 `WW.Schema.repairDraft` 把放错位置的字段挪回原处（顶层的 `side` → `objectives.side`、误嵌进列表项的顶层字段），并去掉教程卡片 `guide`。之所以分段：让小模型一口气写 25KB 的 JSON，一个括号写错整关作废，长思考还可能在写正文前就占满上下文。
 

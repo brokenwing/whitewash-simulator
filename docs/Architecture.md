@@ -87,7 +87,7 @@ flowchart TB
 | `js/engine/levels.js` | 关卡注册表、动态加载内置关卡、导入解析、导出脚本 |
 | `js/engine/bots.js` | 离线机器人：固定打法（平衡表用）、照教程卡片操作、参数化打法 `policy(genome)`（编辑器通关测试和 Node 测试共用） |
 | `js/llm/` | AI 设置与适配器（`client.js`）、任务提示词与运行器（`prompts.js`）、输出结构（`shape.js`）、离线规则（`offline.js`） |
-| `js/ui/` | 界面：`app.js` 选关 · `game.js` 作战室 · `statement.js` 公文编辑器 · `items.js` 道具对话框 · `charts.js` 图表 · `settings.js` 设置 · `dom.js` 安全的 DOM 工具 |
+| `js/ui/` | 界面：`app.js` 选关 · `game.js` 作战室 · `runs.js` 存档（档案馆、对局记录、写成爽文） · `statement.js` 公文编辑器 · `items.js` 道具对话框 · `charts.js` 图表 · `settings.js` 设置 · `dom.js` 安全的 DOM 工具 |
 | `js/editor/` | 编辑器：`fields.js` 字段元数据 · `forms.js` 表单渲染 · `editor.js` 主程序 · `levelgen.js` 分段生成关卡（无 DOM，评测也用）· `ai-assist.js` AI 生成弹窗与分区补全 · `levelcheck.js` 通关测试的扫描与体检分析（无 DOM，`--check` 也用）· `levelcheck-ui.js` 通关测试弹窗 |
 | `levels/` | `manifest.js` 内置关卡清单 + 每关一个文件 |
 | `tools/serve.py` | 可选的本地静态服务 + LLM 跨域转发 + API Key 托管（`/api/key`） |
@@ -304,7 +304,8 @@ flowchart LR
 |---|---|
 | `settings` | AI 设置（不含 Key；托管模式下只有 `serverKeyOrigin` 和掩码 `serverKeyHint`） |
 | `apikey` / sessionStorage `apikey` | API Key（仅“保存在本浏览器”/“仅本次会话”模式；切到托管模式时删除） |
-| `save.<关卡id>` | 进行中的对局（每关独立，互不影响） |
+| `runs` | 存档索引：每局一条（关卡、难度、回合、是否结案、评级、⭐、是否已成文、时间） |
+| `run.<存档id>` | 一局的完整存档（`Game.serialize()`）+ `ending`（结案报告）+ `story`（爽文）。每次签约开局新建一份；结案后保留为战绩，帖子只留最热 30 条。已结案的局最多 30 份，超出或写入时空间不足，自动删最旧的未加星战绩（进行中的局从不自动删）。旧版的 `save.<关卡id>` 首次读取时迁移过来 |
 | `records` | 每关 × 每难度的最佳成绩 |
 | `customLevels` | 编辑器保存或导入的关卡 |
 | `editorDraft` | 编辑器草稿 |

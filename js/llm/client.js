@@ -520,9 +520,11 @@
 
   /* ---------------------------------------------------------------- public */
 
-  /* o: { system, user, shape?, effort?, maxTokens?, stream?, onText?, task? } */
+  /* o: { system, user, shape?, effort?, maxTokens?, stream?, onText?, task?, timeoutSec? } */
   function chat(o) {
     var s = getSettings();
+    /* long outputs (e.g. story.write) may ask for more time than the configured timeout */
+    if (o.timeoutSec && o.timeoutSec > (s.timeoutSec || 120)) s = Object.assign({}, s, { timeoutSec: o.timeoutSec });
     var key = getKey();
     var started = Date.now();
     var entry = { id: U.uid('call'), time: new Date().toLocaleTimeString(), task: o.task || 'chat', provider: s.provider, model: s.model, ok: false, ms: 0, system: clip(o.system, 6000), user: clip(o.user, 6000), response: '', error: '' };

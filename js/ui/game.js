@@ -1,7 +1,8 @@
 /*
  * GameUI: briefing (contract + difficulty) -> war room -> result. Mountable into any container,
  * so the level editor can test-play a level without saving it anywhere.
- *   WW.GameUI.mount(container, level, { onExit, testMode, resume })
+ *   WW.GameUI.mount(container, level, { onExit, testMode, resume, runId })
+ * Every game started gets its own run id; the run is autosaved under it (WW.Store.saveRunById).
  */
 (function (WW) {
   'use strict';
@@ -44,6 +45,8 @@
     this.pane = 'center';
     this.lastAiToast = 0;
     this.unsub = [];
+    this.runId = this.opts.runId || null;
+    this.saveWarned = false;
   }
 
   var P = GameUI.prototype;
@@ -67,7 +70,7 @@
     var lv = this.level;
     var allowed = lv.difficulty.allowed;
     var chosen = allowed.indexOf('regular') >= 0 ? 'regular' : allowed[0];
-    var saved = this.opts.testMode ? null : WW.Store.loadRun(lv.id);
+    var openRuns = this.opts.testMode ? [] : WW.Store.runsOf(lv.id, true);
     var seal = h('div', { class: 'big-seal' }, '已签约', h('br'), D.pools.firm);
     var publicFacts = lv.facts.filter(function (f) { return f.publicAtStart; });
     var activeOpps = lv.opponents.filter(function (o) { return o.startActive && !o.enterWhen; });
@@ -110,9 +113,25 @@
         activeOpps.length ? h('div', { class: 'brief-box' }, h('h4', null, '🎯 已知对手'), h('ul', null, activeOpps.map(function (o) { return h('li', null, o.avatar + ' ' + o.name + (o.desc ? '：' + o.desc : '')); }))) : null),
       h('p', { style: { marginTop: '16px' } }, h('span', { class: 'label-col' }, '选择难度：')),
       diffCards,
+      openRuns.length ? h('div', { class: 'resume-list' },
+        h('p', null, h('span', { class: 'label-col' }, '未完成的存档：')),
+        openRuns.map(function (m) {
+          var row = h('div', { class: 'resume-row' },
+            h('span', null, (D.difficulties[D.difficultyId(m.difficulty)] || {}).name + ' · 第 ' + m.turn + ' 回合 · ' + WW.RunsUI.when(m.updatedAt)),
+            h('button', { class: 'btn small', on: { click: function () {
+              var data = WW.Store.loadRunById(m.id);
+              if (!data || !data.state) { WW.DOM.toast('存档读取失败', 'bad'); return; }
+              self.resume(data, m.id);
+            } } }, '继续'),
+            h('button', { class: 'btn small ghost', title: '删除这份存档', on: { click: function () {
+              WW.DOM.confirm('删除这份存档？删除后无法恢复。', { ok: '删除', danger: true }).then(function (ok) {
+                if (ok) { WW.Store.deleteRun(m.id); row.remove(); }
+              });
+            } } }, '删除'));
+          return row;
+        })) : null,
       h('div', { class: 'sign-row' },
         h('button', { class: 'btn', style: { color: '#1b1b1a', background: '#fff' }, on: { click: function () { self.exit(); } } }, '返回'),
-        saved && saved.state && !saved.state.finished ? h('button', { class: 'btn', style: { color: '#1b1b1a', background: '#fff' }, on: { click: function () { self.resume(saved); } } }, '继续上次（' + D.difficulties[D.difficultyId(saved.state.difficulty)].name + ' · 第 ' + saved.state.turn + ' 回合）') : null,
         h('button', { class: 'btn primary', on: { click: function () {
           seal.classList.add('show');
           setTimeout(function () { self.start(chosen); }, 600);
@@ -146,19 +165,22 @@
 
   P.start = function (difficulty) {
     var game = new WW.Engine.Game(this.rawLevel, { difficulty: difficulty, aiRunner: WW.AI.run });
+    this.runId = U.uid('run');
     this.attach(game);
     this.save();
     this.renderRoom();
     this.showTurnBriefing(game.state.briefing);
   };
 
-  P.resume = function (save) {
+  P.resume = function (save, runId) {
     var game;
+    if (runId) this.runId = runId;
+    this.hasExtras = !!(save && (save.ending || save.story));
     try {
       game = WW.Engine.restore(this.rawLevel, save, { aiRunner: WW.AI.run });
     } catch (e) {
-      WW.DOM.toast('存档损坏，已重新开始：' + e.message, 'bad');
-      WW.Store.clearRun(this.level.id);
+      WW.DOM.toast('存档损坏，无法继续：' + e.message, 'bad');
+      this.runId = null;
       return this.showBriefing();
     }
     this.attach(game);
@@ -167,13 +189,28 @@
   };
 
   P.save = function () {
-    if (this.opts.testMode || !this.game) return;
+    if (this.opts.testMode || !this.game || !this.runId) return;
     var st = this.game.state;
+    var data = this.game.serialize();
     if (st.finished) {
-      WW.Store.clearRun(this.level.id);
-      WW.Store.saveRecord(this.level.id, st.difficulty, { grade: st.final.grade, score: st.final.score, result: st.result, date: new Date().toLocaleDateString() });
-    } else {
-      WW.Store.saveRun(this.level.id, this.game.serialize());
+      if (!this.recordSaved) {
+        this.recordSaved = true;
+        WW.Store.saveRecord(this.level.id, st.difficulty, { grade: st.final.grade, score: st.final.score, result: st.result, date: new Date().toLocaleDateString() });
+      }
+      /* finished runs are kept as records: only the hottest posts are needed to look back / write the story */
+      var keep = {};
+      WW.Feed.ranked(data.state, 'all').slice(0, 30).forEach(function (p) { keep[p.id] = true; });
+      data.state.posts = data.state.posts.filter(function (p) { return keep[p.id]; });
+    }
+    /* ending report / story are patched into the stored run (WW.Store.patchRun): keep them */
+    var old = st.finished || this.hasExtras ? WW.Store.loadRunById(this.runId) : null;
+    if (old && old.ending) data.ending = old.ending;
+    if (old && old.story) data.story = old.story;
+    var r = WW.Store.saveRunById(this.runId, data, { levelTitle: this.level.meta.title, cover: this.level.meta.cover, turns: this.level.contract.turns });
+    if (r.pruned.length) WW.DOM.toast('已自动清理 ' + r.pruned.length + ' 份最旧的未收藏战绩（存档上限或存储空间不足）', 'warn', 6000);
+    if (!r.ok && !this.saveWarned) {
+      this.saveWarned = true;
+      WW.DOM.toast('存档失败：浏览器存储已满。可在首页「存档」里删除旧存档。', 'bad', 8000);
     }
   };
 
@@ -822,17 +859,21 @@
       sides.length ? h('div', { class: 'col', style: { gap: '4px' } }, sides) : null,
       h('div', { class: 'row wrap', style: { marginTop: '24px', justifyContent: 'flex-end' } },
         h('button', { class: 'btn', on: { click: function () { self.showLog(); } } }, '查看完整日志'),
-        h('button', { class: 'btn', on: { click: function () { var lvl = self.rawLevel; var o = self.opts; var c = self.container; self.destroy(); WW.GameUI.mount(c, lvl, o); } } }, '再来一局'),
+        !self.opts.testMode && self.runId ? h('button', { class: 'btn accent', on: { click: function () { WW.RunsUI.storyDialog(self.runId); } } }, '✍️ 写成爽文') : null,
+        h('button', { class: 'btn', on: { click: function () { var lvl = self.rawLevel; var o = Object.assign({}, self.opts); delete o.resume; delete o.runId; var c = self.container; self.destroy(); WW.GameUI.mount(c, lvl, o); } } }, '再来一局'),
         h('button', { class: 'btn primary', on: { click: function () { self.exit(); } } }, self.opts.testMode ? '结束试玩' : '返回选关')));
 
     this.unsub.forEach(function (fn) { fn(); });
     this.unsub = [];
     WW.DOM.replace(this.container, view);
     window.scrollTo(0, 0);
-    g.runAI('ending.report', {}).then(function (res) {
+    var stored = self.runId && !self.opts.testMode ? WW.Store.loadRunById(self.runId) : null;
+    var ending = stored && stored.ending ? Promise.resolve({ data: stored.ending }) : g.runAI('ending.report', {});
+    ending.then(function (res) {
       var d = res.data || {};
       WW.DOM.replace(report, d.report || '');
       WW.DOM.replace(epi, d.epilogue || '');
+      if (self.runId && !self.opts.testMode && !(stored && stored.ending)) WW.Store.patchRun(self.runId, { ending: { report: d.report || '', epilogue: d.epilogue || '', source: res.source || '' } });
     });
   };
 
@@ -856,11 +897,13 @@
   WW.GameUI = {
     mount: function (container, level, opts) {
       var ui = new GameUI(container, level, opts);
-      if (opts && opts.resume) ui.resume(opts.resume);
+      if (opts && opts.resume) ui.resume(opts.resume, opts.runId);
       else ui.showBriefing();
       return ui;
     },
     deltaChips: deltaChips,
+    LINE_ICONS: LINE_ICONS,
+    STAT_LABELS: STAT_LABELS,
     help: help,
     stars: stars
   };

@@ -310,10 +310,94 @@
         return situation(game) + '\n\n委托结案：' + (st.result === 'win' ? '成功' : '失败') + '（' + st.endTitle + '：' + st.endText + '），评级 ' + f.grade + '，得分 ' + f.score + '。谎言债 ' + st.lieDebt + '，被打脸 ' + st.counters.faceSlaps + ' 次，水军被扒 ' + st.counters.shillExposed + ' 次。\n经过：\n' + acts.join('\n') +
           '\n\n请写：report = 150 字内的《结案报告》（公关公司内部口吻，冷静专业、暗含讽刺）；epilogue = 80 字内的“三个月后……”尾声，黑色幽默。';
       }
+    },
+
+    /* args: { length: 'short'|'long', hero, ending: {report, epilogue} }; plain-text Markdown */
+    'story.write': {
+      effort: 'medium', maxTokens: 14000, shape: null, timeoutSec: 300,
+      user: function (game, a) {
+        var long = a.length === 'long';
+        return storyMaterial(game, a) +
+          '\n\n【写作要求】把上面这局游戏改写成一篇网络爽文，约 ' + (long ? '4000' : '1500') + ' 字，用 Markdown：第一行是“# 书名”，之后分 ' + (long ? '5~7' : '3~4') + ' 章，每章用“## 第X章 章名”。\n' +
+          '- 主角：' + (a.hero || '老K') + '，' + D.pools.firm + '的首席“洗地官”，第三人称叙述。\n' +
+          '- 爽文节奏：开局危机压顶、客户施压、对手嚣张 → 主角见招拆招、一次次打脸对手 → 高潮反转 → 结局。多用短句、金句、围观网友的反应和“全场震惊”式的爽点。\n' +
+          '- 必须忠于这局的实际经过：用上真实发生的关键操作、对手招式、证据曝光和局势起落，不要编造没发生的大事件；可以补写对话和心理活动。\n' +
+          '- 这是小说不是游戏战报：正文不要出现游戏术语（回合、技能、行动点、评级、得分、谎言债、暴露度、公信力、好感度、满意度等）和素材里的任何具体数值。把数值变化写成看得见的剧情：热搜掉榜或冲顶、评论区风向转变、客户语气变化、对手慌乱。时间用“第X天白天/深夜”这样的说法。\n' +
+          '- 主角做过的事只限经过里列出的操作（技能、公文）；没列出操作的回合，就写主角按兵不动、观望或被动挨打，不要替主角编造删帖、投放、水军等操作。\n' +
+          '- 网民、路人、比喻里同样不得出现任何现实存在的平台、App、电商、品牌名，只用游戏里的平台名。\n' +
+          '- 结局按实际结果写：赢了就痛快收尾；输了写成黑色幽默，主角嘴硬、留下“下一单再见”的伏笔。\n' +
+          '- 保持讽刺意味：爽感来自主角的手段，但字里行间让读者看出洗地的荒诞。\n' +
+          '- 直接输出正文，不要任何解释。';
+      },
+      post: function (game, a, data) { return { text: renumberChapters(data.text) }; }
     }
   };
 
-  var LITE = ['statement.judge', 'statement.complete', 'statement.polish', 'feed.generate', 'report.judge', 'ending.report'];
+  /* models miscount chapters ("第四章" twice): number the "## 第X章" headings in order */
+  var CN_NUM = ['一', '二', '三', '四', '五', '六', '七', '八', '九', '十', '十一', '十二', '十三', '十四', '十五'];
+  function renumberChapters(text) {
+    var n = 0;
+    return String(text || '').replace(/^##\s*第[一二三四五六七八九十百零〇\d]+章/gm, function () {
+      n += 1;
+      return '## 第' + (CN_NUM[n - 1] || n) + '章';
+    });
+  }
+
+  /* everything that happened in a run, in order, for story.write */
+  function storyMaterial(game, a) {
+    a = a || {};
+    var st = game.state;
+    var lv = game.level;
+    var f = st.final || {};
+    var out = [];
+    out.push('【这局游戏】委托方 ' + lv.client.name + '（联系人：' + lv.client.contact + '），事件：' + lv.incident.summary);
+    out.push('难度：' + ((D.difficulties[st.difficulty] || {}).name || st.difficulty) + '；合同 ' + lv.contract.turns + ' 回合，实际进行到第 ' + st.turn + ' 回合。');
+    if (st.finished) out.push('结局：' + (st.result === 'win' ? '成功' : '失败') + '——' + st.endTitle + '：' + st.endText + '；评级 ' + f.grade + '，得分 ' + f.score + '。');
+    else out.push('结局：这局还没打完，写到当前进度为止，结尾留悬念。');
+    var s = st.stats;
+    out.push('最终数值：舆论好感 ' + Math.round(s.sentiment) + '，热度 ' + Math.round(s.heat) + '，公信力 ' + Math.round(s.credibility) + '，暴露度 ' + Math.round(s.exposure) + '，客户满意 ' + Math.round(s.satisfaction) +
+      '；谎言债 ' + U.round(st.lieDebt, 1) + '，被打脸 ' + st.counters.faceSlaps + ' 次，水军被扒 ' + st.counters.shillExposed + ' 次。');
+    var opps = Object.keys(st.opponents || {}).map(function (id) { return st.opponents[id]; }).filter(function (o) { return o && o.name; });
+    if (opps.length) out.push('对手：' + opps.map(function (o) { return o.name; }).join('、'));
+    var nActs = st.log.filter(function (l) { return l.kind === 'action'; }).length;
+    out.push(nActs ? '主角本局共使用技能 ' + nActs + ' 次（经过里标注“〔我方〕”的就是）。' : '主角本局一个技能都没用过，全程按兵不动。');
+    out.push('');
+    out.push('【经过（按回合）】');
+    var chron = st.chronicle || [];
+    var byTurn = {};
+    st.log.forEach(function (l) { (byTurn[l.turn] = byTurn[l.turn] || []).push(l); });
+    chron.forEach(function (c) { byTurn[c.turn] = byTurn[c.turn] || []; });
+    Object.keys(byTurn).map(Number).sort(function (x, y) { return x - y; }).forEach(function (t) {
+      var c = chron.filter(function (x) { return x.turn === t; })[0];
+      out.push('第' + t + '回合（' + game.turnLabel(t) + '）');
+      byTurn[t].forEach(function (l) { if (l.kind !== 'end') out.push('  - ' + (l.kind === 'action' ? '〔我方〕' : '') + l.text); });
+      if (c && c.summary) out.push('  局势：' + c.summary);
+      if (c && c.headlines && c.headlines.length) out.push('  热搜：' + c.headlines.join(' / '));
+      if (c && c.deltas && Object.keys(c.deltas).length) {
+        out.push('  回合数值变化：' + Object.keys(c.deltas).map(function (k) { return (WW.Effects.STAT_NAMES[k] || (k === 'budget' ? '预算' : k)) + (c.deltas[k] > 0 ? '+' : '') + c.deltas[k]; }).join('，'));
+      }
+    });
+    var sts = st.statements || [];
+    if (sts.length) {
+      out.push('');
+      out.push('【发布的公文】');
+      sts.forEach(function (x) { out.push('第' + x.turn + '回合《' + x.title + '》（' + x.type + '，评审：' + (x.verdict || x.q) + '）：' + x.text.slice(0, 200)); });
+    }
+    var client = st.messages.filter(function (m) { return m.from === 'client'; }).slice(-8);
+    if (client.length) {
+      out.push('');
+      out.push('【客户' + lv.client.contact + '的消息】');
+      client.forEach(function (m) { out.push('第' + m.turn + '回合：' + m.text.slice(0, 120)); });
+    }
+    if (a.ending && (a.ending.report || a.ending.epilogue)) {
+      out.push('');
+      out.push('【结案报告】' + (a.ending.report || ''));
+      if (a.ending.epilogue) out.push('【尾声】' + a.ending.epilogue);
+    }
+    return out.join('\n');
+  }
+
+  var LITE = ['statement.judge', 'statement.complete', 'statement.polish', 'feed.generate', 'report.judge', 'ending.report', 'story.write'];
 
   function enabledFor(task) {
     if (!WW.LLM) return false;
@@ -340,12 +424,15 @@
     var spec = TASKS[task];
     if (!spec || !enabledFor(task)) return Promise.resolve({ data: WW.Offline.run(game, task, args), source: 'offline' });
     var call = WW.LLM.chat({
-      task: task, effort: spec.effort, maxTokens: spec.maxTokens, shape: spec.shape,
+      task: task, effort: spec.effort, maxTokens: (args && args.maxTokens) || spec.maxTokens, shape: spec.shape, timeoutSec: spec.timeoutSec,
       system: baseSystem(game), user: spec.user(game, args || {}),
       stream: !!opts.onText && WW.LLM.getSettings().streaming, onText: opts.onText
     });
     return call.then(function (res) {
-      if (!spec.shape) return { data: { text: String(res.text || '').trim() }, source: 'ai' };
+      if (!spec.shape) {
+        var plain = { text: String(res.text || '').trim() };
+        return { data: spec.post ? spec.post(game, args, plain) : plain, source: 'ai' };
+      }
       return parseOrRepair(spec, game, res, task).then(function (json) {
         var data = S.coerce(spec.shape, json);
         if (spec.post) data = spec.post(game, args, data);
@@ -357,5 +444,5 @@
     });
   }
 
-  WW.AI = { TASKS: TASKS, LITE: LITE, run: run, enabledFor: enabledFor, baseSystem: baseSystem, situation: situation };
+  WW.AI = { TASKS: TASKS, LITE: LITE, run: run, enabledFor: enabledFor, baseSystem: baseSystem, situation: situation, storyMaterial: storyMaterial, renumberChapters: renumberChapters };
 })(window.WW);
