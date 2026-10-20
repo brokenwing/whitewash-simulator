@@ -132,7 +132,10 @@
             { key: 'exposureCooldown', label: '暴露度自然冷却', type: 'number' },
             { key: 'detectBase', label: '被扒基础概率', type: 'number', step: 0.05 },
             { key: 'randomEventChance', label: '随机事件概率', type: 'number', step: 0.05 },
-            { key: 'organicPosts', label: '每回合自然发帖规模', type: 'number' }
+            { key: 'organicPosts', label: '每回合自然发帖规模', type: 'number' },
+            { key: 'driftRate', label: '阵营漂移速率', type: 'number', step: 0.05 },
+            { key: 'pressureBaseline', label: '舆论压力基线（分母常数）', type: 'number' },
+            { key: 'maxFeed', label: '舆论场最多保留帖子数', type: 'number' }
           ]
         }
       ]
@@ -315,7 +318,7 @@
             { key: 'morale', label: '士气', type: 'number' },
             { key: 'resources', label: '初始资源', type: 'number' },
             { key: 'income', label: '每回合资源', type: 'number' },
-            { key: 'cooptable', label: '可被招安', type: 'bool', def: true },
+            { key: 'cooptable', label: '可被招安（受害者群体始终不可）', type: 'bool', def: true },
             { key: 'startActive', label: '开局即在场', type: 'bool', def: true },
             { key: 'desc', label: '描述', type: 'text', full: true },
             { key: 'enterWhen', label: '入场条件（开局不在场时）', type: 'cond', full: true },
@@ -327,7 +330,7 @@
                 { key: 'use', label: '技能', type: 'select', options: 'abilities' },
                 { key: 'weight', label: '权重（留空=默认）', type: 'number' },
                 { key: 'cooldown', label: '冷却（留空=默认）', type: 'number' },
-                { key: 'condition', label: '额外条件', type: 'cond', full: true },
+                { key: 'condition', label: '额外条件（与技能自带的使用条件同时满足）', type: 'cond', full: true },
                 { key: 'overrides', label: '参数覆盖（JSON）', type: 'json', full: true }
               ]
             },

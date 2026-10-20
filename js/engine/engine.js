@@ -473,13 +473,16 @@
 
   P.endGame = function (result, title, text, epilogue) {
     var st = this.state;
-    if (st.finished) return;
-    st.finished = true;
+    if (st.finished || this._ending) return;
+    this._ending = true;
     st.result = result;
     st.endTitle = title || (result === 'win' ? '结案' : '失败');
     st.endText = text || '';
     st.endEpilogue = epilogue || '';
+    /* judge end-of-game tasks before `finished` is set: Effects.apply skips everything once it is */
     WW.Objectives.check(this, 'end');
+    st.finished = true;
+    this._ending = false;
     st.final = WW.Scoring.compute(this);
     st.history.push(this.historyPoint());
     this.log('end', st.endTitle + '：' + st.endText);
@@ -510,7 +513,9 @@
   };
 
   P.deadline = function () {
-    var win = this.state.objectives.mainComplete || WW.Cond.evaluate(this.level.victory.condition, this);
+    /* tasks judged at the end (at:'end') count toward the main quest before the verdict */
+    WW.Objectives.check(this, 'end');
+    var win =this.state.objectives.mainComplete || WW.Cond.evaluate(this.level.victory.condition, this);
     if (win) this.endGame('win', '合同到期 · 顺利结案', this.level.victory.text || '合同期满，舆情达到了约定目标。', '');
     else this.endGame('lose', '合同到期 · 未达标', '合同期满，主任务没有完成，客户拒付尾款。', 'expired');
   };

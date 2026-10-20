@@ -55,13 +55,13 @@
       id: 'throttle', name: '限流降权', icon: '🔇', tier: 2, ap: 1, cost: 0,
       handler: 'throttle', channel: 'deletion', target: 'criterion', ai: 'posts.classify',
       desc: '按条件给帖子限流：不删除，只让更少人看到。比删帖隐蔽，但更贵。',
-      risk: '外网内容限不了流；单价是删帖的 1.5 倍。',
+      risk: '官方媒体和外网内容限不了流；单价是删帖的 1.5 倍。',
       params: { priceMul: 1.5, maxPosts: 15, reachMul: 0.4 }
     },
     distraction: {
       id: 'distraction', name: '买热搜转移话题', icon: '🍉', tier: 2, ap: 1, cost: 12,
       handler: 'distraction', channel: 'distraction', target: 'none', ai: 'distraction.generate',
-      desc: '买一个更大的“瓜”顶上热搜，两回合内持续分走热度。',
+      desc: '买一个更大的“瓜”顶上热搜：热度立刻下降，本回合结算时再降一次。',
       risk: '重复使用会被识破：“这瓜出来得也太巧了”。',
       params: { heatNow: 12, heatNext: 8, exposure: 5 }
     },

@@ -21,7 +21,7 @@
     { key: 'ap', label: '剩余行动点' },
     { key: 'turn', label: '回合' },
     { key: 'turnsLeft', label: '剩余回合' },
-    { key: 'difficulty', label: '难度档位(0-3)' },
+    { key: 'difficulty', label: '难度档位(' + (WW.Data.difficultyOrder || []).map(function (id, i) { return i + ' ' + WW.Data.difficulties[id].name; }).join(' / ') + ')' },
     { key: 'phase', label: '舆情阶段(0平息-3爆发)' },
     { key: 'trend.rank', label: '热搜排名' },
     { key: 'lieDebt', label: '谎言债' },

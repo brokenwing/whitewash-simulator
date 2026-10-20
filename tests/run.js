@@ -394,6 +394,104 @@ async function unitTests() {
     eq(b.Log.unseen(), 0, 'last session errors are not unseen');
   });
 
+  await test('required task with at:"end" counts toward the deadline verdict', async () => {
+    const lv = WW.Schema.blank();
+    lv.contract.turns = 3;
+    lv.objectives = { stages: [{ id: 's1', title: '一', tasks: [{ id: 'keep', title: '热度不超过 100', at: 'end', complete: { var: 'stats.heat', op: '<=', value: 100 } }] }] };
+    lv.victory = { condition: { var: 'turn', op: '<', value: 0 } };
+    const game = new WW.Engine.Game(lv, { seed: 1 });
+    while (!game.state.finished) await game.endTurn();
+    eq(game.state.result, 'win', game.state.endTitle);
+    eq(game.state.objectives.tasks.keep.status, 'done');
+  });
+
+  await test('rewards of tasks judged at the end are paid (early finish and deadline)', async () => {
+    const lv = WW.Schema.blank();
+    lv.objectives = {
+      stages: [{ id: 's1', title: '一', tasks: [{ id: 'go', title: '撑过第 1 回合', complete: { var: 'turn', op: '>=', value: 2 } }] }],
+      side: [{ id: 'clean', title: '零水军', at: 'end', complete: { var: 'itemUses.shill', op: '==', value: 0 }, fail: { var: 'itemUses.shill', op: '>', value: 0 }, rewards: [{ type: 'score', delta: 5 }] }]
+    };
+    const early = new WW.Engine.Game(lv, { seed: 1 });
+    await early.endTurn();
+    assert(early.finishEarly(), 'main quest done');
+    eq(early.state.objectives.tasks.clean.status, 'done');
+    eq(early.state.counters.scoreBonus, 5);
+    lv.objectives.stages[0].tasks[0].complete = { var: 'turn', op: '>=', value: 99 };
+    const late = new WW.Engine.Game(lv, { seed: 1 });
+    while (!late.state.finished) await late.endTurn();
+    eq(late.state.counters.scoreBonus, 5);
+  });
+
+  await test('fail on a required task: never fires, and validate says so', async () => {
+    const lv = WW.Schema.blank();
+    lv.objectives = { stages: [{ id: 's', title: '一', tasks: [{ id: 't', title: 't', complete: { var: 'turn', op: '>=', value: 9 }, fail: { var: 'turn', op: '>=', value: 1 } }] }] };
+    assert(WW.Schema.validate(lv).warnings.some((w) => /不会生效/.test(w.msg)), 'warning says fail has no effect');
+    const game = new WW.Engine.Game(lv, { seed: 1 });
+    await game.endTurn();
+    eq(game.state.objectives.tasks.t.status, 'active');
+  });
+
+  await test('victims cannot be co-opted, even without cooptable:false', () => {
+    const lv = WW.Schema.blank();
+    lv.items.enabled.push('coopt');
+    lv.items.startTier = 3;
+    lv.opponents = [{ id: 'v', name: '家属', kind: 'victims', faction: 'victim', abilities: ['rumor'] }, { id: 'g', name: '营销号', kind: 'group', abilities: ['rumor'] }];
+    const game = new WW.Engine.Game(lv, { seed: 1 });
+    assert(WW.Actions.get('coopt').validate(game, game.items.coopt, { oppId: 'v' }), 'victims refused');
+    eq(WW.Actions.get('coopt').validate(game, game.items.coopt, { oppId: 'g' }), '');
+  });
+
+  await test('opponent iron fist honours lockItems / lockTurns overrides', () => {
+    const lv = WW.Schema.blank();
+    lv.facts[0].regulatory = true;
+    lv.opponents = [{ id: 'o', name: '对家', abilities: [{ use: 'iron_fist', overrides: { params: { lockItems: ['shill'], lockTurns: 3, success: 1 } } }] }];
+    const game = new WW.Engine.Game(lv, { seed: 1 });
+    game.state.facts.f1.revealed = true;
+    const o = game.state.opponents.o;
+    o.strength = 100;
+    const a = WW.Opponents.abilityFor(game, game.oppDef('o').abilities[0]);
+    game.rng.chance = () => true; // the report always lands
+    WW.Opponents.HANDLERS.iron_fist(game, o, a, 2);
+    eq(JSON.stringify(game.state.items.locked), JSON.stringify({ shill: game.state.turn + 3 }));
+    const plain = new WW.Engine.Game(WW.Levels.get('milktea'), { seed: 1 });
+    WW.Truth.regulatorStrike(plain, 'test');
+    eq(Object.keys(plain.state.items.locked).sort().join(), 'distraction,kol,shill,trend_remove');
+  });
+
+  await test('opponent ability condition adds to the ability\'s own condition', () => {
+    const lv = WW.Schema.blank();
+    lv.abilities = [{ id: 'cry', name: '哭诉', condition: { var: 'stats.heat', op: '>=', value: 40 }, effects: [] }];
+    lv.opponents = [{ id: 'o', name: '对家', abilities: [{ use: 'cry', condition: { var: 'turn', op: '>=', value: 3 } }] }];
+    const game = new WW.Engine.Game(lv, { seed: 1 });
+    const a = WW.Opponents.abilityFor(game, game.oppDef('o').abilities[0]);
+    game.state.stats.heat = 80; game.state.turn = 1;
+    assert(!WW.Cond.evaluate(a.condition, game), 'turn gate');
+    game.state.stats.heat = 10; game.state.turn = 5;
+    assert(!WW.Cond.evaluate(a.condition, game), 'heat gate kept');
+    game.state.stats.heat = 80;
+    assert(WW.Cond.evaluate(a.condition, game), 'both hold');
+  });
+
+  await test('OpenAI JSON mode: a plain-text call does not reset the learned mode', async () => {
+    const sent = [];
+    const fetch = async (url, init) => {
+      const body = JSON.parse(init.body);
+      const rf = body.response_format ? body.response_format.type : 'none';
+      sent.push(rf);
+      if (rf === 'json_object') return { ok: false, status: 400, text: async () => '{"error":{"message":"json_object not supported"}}', clone() { return this; } };
+      const payload = { choices: [{ message: { content: '{"a":1}' }, finish_reason: 'stop' }] };
+      return { ok: true, status: 200, json: async () => payload, text: async () => JSON.stringify(payload), clone() { return this; } };
+    };
+    const W = loadContext({ extraGlobals: { fetch, AbortController } }).WW;
+    W.LLM.saveSettings(Object.assign({}, W.LLM.DEFAULTS, { provider: 'custom', format: 'openai', baseURL: 'http://127.0.0.1:9/v1', model: 'fake', keyMode: 'local', aiLevel: 'full' }), 'k');
+    const shape = W.Shape.obj({ a: W.Shape.num(0, 9) });
+    await W.LLM.chat({ system: 's', user: 'u', shape });
+    await W.LLM.chat({ system: 's', user: 'u' });
+    sent.length = 0;
+    await W.LLM.chat({ system: 's', user: 'u', shape });
+    eq(sent.join(','), 'json_schema');
+  });
+
   for (const entry of WW.Levels.list()) {
     await test('level validates: ' + entry.id, () => {
       const v = WW.Schema.validate(entry.level);

@@ -286,7 +286,7 @@
         var bigNeg = topNegative(game, function (p) { return p.author.tier !== 'normal' && !p.controlled; })[0];
         var anyNeg = topNegative(game, function (p) { return !p.controlled; })[0];
         var dirty = vals(st.opponents).find(function (o) { return o.active && (o.flags.usedShill || o.flags.spreadRumor || (game.oppDef(o.id).dirt || []).length); });
-        var coopt = vals(st.opponents).find(function (o) { return o.active && game.oppDef(o.id).cooptable !== false; });
+        var coopt = vals(st.opponents).find(function (o) { return o.active && game.oppDef(o.id).cooptable !== false && game.oppDef(o.id).kind !== 'victims'; });
         var victimBad = st.factions.victim && st.factions.victim.sentiment < -50;
         var probe = g.intel === 'probe' && !probed && v.unknown[0];
         (has('iron') && rumorPost && (await tryAct(game, 'iron_fist', { postId: rumorPost.id }))) ||

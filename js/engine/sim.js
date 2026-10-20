@@ -3,7 +3,7 @@
  * plan returned by feedPlan(), so the AI always writes text that matches the numbers.
  *   target_f = bias_f + pressureWeight·Π + credibilityWeight·(C-50) - severity·severityWeight·H/100
  *   s_f     += volatility_f · driftRate · (target_f - s_f)
- *   H        = H·(1-decay) + max(0,-Π)·spreadWeight·(0.4 + H/100)
+ *   H        = H·(1-decay) + max(0,-Π)·spreadWeight·H/100
  */
 (function (WW) {
   'use strict';
@@ -229,7 +229,7 @@
       var c = Math.max(1, Math.min(4, req.count || 1));
       for (var k = 0; k < c; k++) {
         slots.push({
-          kind: 'request', ref: ri, faction: req.faction || (req.opp ? (game.oppDef(req.opp) || {}).faction : null) || (req.stance >= 0 ? 'passerby' : 'passerby'),
+          kind: 'request', ref: ri, faction: req.faction || (req.opp ? (game.oppDef(req.opp) || {}).faction : null) || 'passerby',
           stance: U.clamp(req.stance === undefined ? -1 : req.stance, -2, 2), tier: req.tier || 'normal',
           platform: req.platform || (req.opp ? (game.oppDef(req.opp) || {}).platform : null) || WW.Feed.pickPlatform(game),
           hint: req.hint || '', pool: req.pool || null, vars: req.vars || null, fact: req.fact || null, opp: req.opp || null,

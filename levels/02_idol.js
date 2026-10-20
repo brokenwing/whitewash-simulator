@@ -110,8 +110,7 @@ WW.Levels.register({
         "id": "s1", "title": "稳住基本盘", "desc": "粉丝不能散，热度要降。",
         "rewards": [{ "type": "unlock", "tier": 2 }, { "type": "budget", "delta": 25 }],
         "tasks": [
-          { "id": "i1_fans", "title": "粉丝好感保持在 40 以上", "required": true, "complete": { "var": "faction.fans", "op": ">=", "value": 40 } },
-          { "id": "i1_heat", "title": "热度降到 70 以下", "required": true, "complete": { "var": "stats.heat", "op": "<=", "value": 70 } },
+          { "id": "i1_heat", "title": "热度降到 70 以下，且粉丝好感不低于 40", "required": true, "complete": { "all": [{ "var": "stats.heat", "op": "<=", "value": 70 }, { "var": "faction.fans", "op": ">=", "value": 40 }] } },
           { "id": "i1_fast", "title": "（额外）第 2 回合内发布工作室声明", "required": false, "deadline": 2, "complete": { "var": "itemUses.statement", "op": ">=", "value": 1 }, "rewards": [{ "type": "budget", "delta": 10 }] }
         ]
       },

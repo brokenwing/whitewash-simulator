@@ -53,7 +53,7 @@ flowchart LR
 | `contract` | 对象 | `turns` 回合数、`actionPoints` 每回合行动点、`budget` 预算（万元）、`slotsPerDay` 每天回合数 1/2/3、`turnLabels` 自定义回合名 |
 | `difficulty` | 对象 | `allowed` 开放的难度（intern/regular/gold）、`overrides` 按档位覆盖参数 |
 | `initialStats` | 对象 | 开局的 `sentiment` `heat` `credibility` `exposure` `satisfaction` |
-| `tuning` | 对象 | 演化参数：`heatDecay` `pressureWeight` `credibilityWeight` `severityWeight` `spreadWeight` `exposureCooldown` `detectBase` `randomEventChance` `organicPosts` |
+| `tuning` | 对象 | 演化参数：`heatDecay` `pressureWeight` `credibilityWeight` `severityWeight` `spreadWeight` `exposureCooldown` `detectBase` `randomEventChance` `organicPosts` `driftRate` `pressureBaseline` `maxFeed` |
 | `factions[]` | 对象 | `id` `name` `desc` `size` 人口占比、`sentiment` 开局好感、`bias` 长期倾向、`volatility` 波动性 0~1、`sens` 各渠道敏感系数 |
 | `platforms` | 数组 | 启用的平台：weibo douyin xiaohongshu zhihu bilibili tieba news overseas |
 | `personas[]` | 对象 | 常驻网民：`id` `name` `faction` `tier`（normal/kol/bigv/media/state）`platform` `style`，可用 `opp` 归属某个对手 |
@@ -169,7 +169,7 @@ flowchart LR
 | `kind` | brand 品牌 / group 群体 / person 个人 / victims 受害者群体（不可收买，发律师函 = 灾难） |
 | `strength` `morale` `resources` `income` | 势力、士气、初始资源、每回合资源 |
 | `startActive` `enterWhen` | 开局不在场时，满足条件后入场 |
-| `abilities[]` | `use` 技能 id、`weight` 权重、`cooldown` 冷却、`condition` 额外条件、`overrides` 参数覆盖（如 `{"params":{"requiresHandle":false}}` 让它没把柄也敢乱举报） |
+| `abilities[]` | `use` 技能 id、`weight` 权重、`cooldown` 冷却、`condition` 额外条件、`overrides` 参数覆盖（如 `{"params":{"requiresHandle":false}}` 让它没把柄也敢乱举报；召唤铁拳还可覆盖 `lockItems` `lockTurns`：约谈后封锁哪些技能、几回合）。`condition` 与技能自带的使用条件需同时满足 |
 | `rumors` `pastScandals` `dirt` | 造谣内容、翻旧账素材、它自己的把柄（反向扒皮用） |
 | `events[]` | 专属事件 |
 
@@ -216,16 +216,16 @@ flowchart LR
 | 字段 | 说明 |
 |---|---|
 | `required` | 必做（阶段内必做全部完成才进入下一阶段）；`false` 为可选额外任务 |
-| `complete` / `fail` | 完成条件 / 失败条件（必做任务不会因 `fail` 失败） |
-| `deadline` | 必须在该回合结束前完成 |
-| `at: "end"` | 只在结案时判定（适合“零水军”“守住红线”这类整局约束）。**这类“全程保持”的目标一定要写 `at: "end"` 并配 `fail`**，否则开局条件就已满足，会立刻判完成 |
+| `complete` / `fail` | 完成条件 / 失败条件（必做任务不会因 `fail` 失败，写了也不生效） |
+| `deadline` | 必须在该回合结束前完成（只对可选任务和支线生效；必做任务过期不会失败） |
+| `at: "end"` | 只在结案时判定（适合“零水军”“守住红线”这类整局约束）。**这类“全程保持”的目标一定要写 `at: "end"` 并配 `fail`**，否则开局条件就已满足，会立刻判完成。这类目标请写成可选任务或支线；必做任务写 `at: "end"` 会在合同到期时判定，后面的阶段在此之前都不会解锁 |
 | `hidden` | 完成后才显示（彩蛋成就） |
 | `offer` | 支线发放时机：`"start"` 或一个条件 |
 | `choice` | 需要玩家接受（客户“加单”） |
 | `from` | client 客户 / system 系统 |
 | `rewards` / `penalty` | 效果列表 |
 
-校验会额外提醒四类“写了等于没写”的任务：开局就已满足完成条件的第一阶段子任务和开局支线；必做子任务要用的技能（含 `flags.rectified` 需要的 `rectify`）在这一阶段还没解锁——本阶段奖励要等本阶段完成才发放，所以只能靠 `startTier` 或前面阶段的奖励；条件里的 `flags.<名>` 没有任何 `flag` 效果会设置（引擎自带的只有 `rectified` 整改、`suppressed` 撤热搜、`clientLied` 查出客户撒谎）；`itemUses.<技能>` 或 `unlock` 的技能不在 `items.enabled` 里。写在顶层的 `side` / `stages` 也会提醒——它们必须放在 `objectives` 里。
+校验会额外提醒四类“写了等于没写”的任务：开局就已满足完成条件的第一阶段子任务和开局支线；必做子任务要用的技能（含 `flags.rectified` 需要的 `rectify`）在这一阶段还没解锁——本阶段奖励要等本阶段完成才发放，所以只能靠 `startTier` 或前面阶段的奖励；条件里的 `flags.<名>` 没有任何 `flag` 效果会设置（引擎自带的只有 `rectified` 整改、`suppressed` 撤热搜、`clientLied` 查出客户撒谎、`abroad` 被捅到外网、`regulated` 被约谈）；`itemUses.<技能>` 或 `unlock` 的技能不在 `items.enabled` 里。写在顶层的 `side` / `stages` 也会提醒——它们必须放在 `objectives` 里。
 
 ---
 

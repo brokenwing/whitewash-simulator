@@ -187,7 +187,7 @@
       case 'expose':
       case 'coopt':
         form.appendChild(buildTargetPicker(false, true));
-        if (item.handler === 'coopt') form.appendChild(h('div', { class: 'small muted' }, '价格随对手势力浮动；维权群体、粉丝团这类对手收买不了。'));
+        if (item.handler === 'coopt') form.appendChild(h('div', { class: 'small muted' }, '价格随对手势力浮动；受害者群体和关卡标明不可招安的对手收买不了。'));
         break;
       case 'investigate':
       case 'endorse': {

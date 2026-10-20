@@ -64,8 +64,7 @@
         var s = j.scores;
         var q = (s.sincerity + s.responsibility + s.empathy + s.clarity) / 4 - (s.blameShift + s.arrogance + s.evasiveness) / 3;
         var fatigue = Math.pow((item.params && item.params.fatigue) || 0.6, st.counters.statementsTurn) * Math.max(0.5, 1 - 0.07 * st.counters.statements);
-        var mute = game.hasModifier('mute') ? 0.7 : 1;
-        var impulse = q * 2.4 * cf(game) * fatigue * ch.reachMul * mute;
+        var impulse = q * 2.4 * cf(game) * fatigue * ch.reachMul;
         game.shiftFactions(impulse, type.channel);
 
         /* a clear, sincere answer takes air out of the story; a bad one feeds it. The first answer ends the "装死" phase. */
@@ -202,7 +201,6 @@
         criterion: criterion, source: res.source,
         candidates: hits.map(function (p) {
           var c = deleteCost(p);
-          if (item.handler === 'throttle' && p.platform !== 'overseas' && c === null && !p.immune) c = 1;
           return {
             id: p.id, reason: reasons[p.id], cost: c === null ? null : U.round(c * ((item.params && item.params.priceMul) || 1), 1),
             immune: c === null, post: p
@@ -632,7 +630,7 @@
       var o = targetOpp(game, params);
       if (!o) return '请选择一个对手';
       var def = game.oppDef(o.id);
-      if (def && !def.cooptable) return '「' + o.name + '」收买不了';
+      if (def && (!def.cooptable || def.kind === 'victims')) return '「' + o.name + '」收买不了';
       return '';
     },
     run: function (game, item, params) {

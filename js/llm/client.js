@@ -1,7 +1,8 @@
 /*
  * LLM client: settings, provider presets and two adapters.
  *  - Anthropic (Claude): official @anthropic-ai/sdk, loaded on demand from a pinned CDN URL with
- *    dangerouslyAllowBrowser (the key stays in this browser). JSON tasks use output_config.format.
+ *    dangerouslyAllowBrowser (a browser-stored key goes straight to the API; in custody mode the relay
+ *    injects it). JSON tasks use output_config.format.
  *  - OpenAI-compatible (DeepSeek / 通义 / Kimi / 智谱 / 豆包 / 硅基流动 / Ollama ...): fetch.
  * Optional local relay (tools/serve.py) for providers that block browser CORS:
  *    {proxyURL}/llm-proxy/<base64url(baseURL)>/<path>
@@ -319,7 +320,8 @@
       };
       var send = function (compat) {
         var params = build(compat);
-        var useFallback = !compat && s.fallbacks && isOfficialAnthropic(s) && !viaProxy(s);
+        /* the local relay forwards the beta header as-is, so custody / proxy mode gets fallbacks too */
+        var useFallback = !compat && s.fallbacks && isOfficialAnthropic(s);
         var api = useFallback ? client.beta.messages : client.messages;
         if (useFallback) {
           params.betas = ['server-side-fallback-2026-07-01'];
@@ -387,7 +389,8 @@
     return pump();
   }
 
-  /* JSON modes to try, most structured first for providers known to support schemas (preset.jsonFormat). */
+  /* JSON modes to try: the preset's own format first (json_schema for LM Studio, json_object otherwise),
+     then the other one, then none. */
   var jsonModeMemo = {};
   function jsonModes(s) {
     var p = preset(s.provider);
@@ -450,12 +453,14 @@
         return retry();
       });
     };
-    /* a 400 while optional parameters are set: drop reasoning_effort if the error is about it, else step
-       the JSON mode down json_schema -> json_object -> none; remember what worked for this endpoint so
+    /* a 400 while optional parameters are set: drop reasoning_effort if the error is about it, else move
+       to the next JSON mode in jsonModes() order (schema presets: json_schema -> json_object -> none; the
+       rest: json_object -> json_schema -> none); remember what worked for this endpoint so
        later calls skip the rejected variants */
     var sendWithMode = function () {
       return send().then(function (res) {
-        if (res.ok) jsonModeMemo[memoKey] = mi;
+        /* only structured calls learn the JSON mode; a plain-text call must not reset it */
+        if (res.ok && modes.length > 1) jsonModeMemo[memoKey] = mi;
         if (res.status !== 400 || !(body.response_format || body.reasoning_effort)) return res;
         return res.clone().text().then(function (t) {
           var canStep = body.response_format && mi < modes.length - 1;

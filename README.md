@@ -76,7 +76,7 @@ python tools/serve.py --open
 Start.html            游戏入口
 LevelEditor.html      关卡编辑器
 css/                  样式（common / game / editor）
-js/core/              命名空间、工具、事件、存储
+js/core/              命名空间、异常日志、工具、事件、存储
 js/data/              默认数据：道具库、技能库、难度、阵营、平台、文本池
 js/engine/            引擎（无 DOM）：schema、条件/效果 DSL、舆论场、道具、演化、真相、任务、对手、评分
 js/llm/               AI：设置与适配器、任务提示词、输出结构、离线规则

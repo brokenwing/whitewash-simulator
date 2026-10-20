@@ -10,7 +10,8 @@
  *  patienceMul  client patience (satisfaction losses are divided by it)
  *  passWeight   weight of the "do nothing" option in opponent move selection
  *  savvy        how sharp netizens are; injected into AI prompts
- *  powerMul     multiplier on every favourable opinion impulse (default 1)
+ *  powerMul     multiplier on favourable impulses routed through game.shiftFactions (all-faction
+ *               impulses: skills, events, refutes...); single-faction shifts are not scaled (default 1)
  *  cushion      share (0-1) of the harm a player's own action does that is absorbed (default 0)
  *  exposureRelief share of exposure that fades every turn, even while manipulating (default 0)
  *  unlimited    every skill is unlocked from the start, costs no action points and ignores

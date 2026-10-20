@@ -168,16 +168,22 @@
     });
   }
 
-  function regulatorStrike(game, source) {
+  var STRIKE_LOCK = ['kol', 'distraction', 'shill', 'trend_remove'];
+
+  /* opts: { lockItems, lockTurns } from the reporting ability's params (default: marketing skills, 2 turns) */
+  function regulatorStrike(game, source, opts) {
     var st = game.state;
+    opts = opts || {};
+    var lock = Array.isArray(opts.lockItems) ? opts.lockItems : STRIKE_LOCK;
+    var turns = Number(opts.lockTurns) > 0 ? Number(opts.lockTurns) : 2;
     game.shiftFactions(-12, 'event');
     game.addStat('credibility', -10);
     game.addStat('satisfaction', -12 / game.diff.patienceMul);
     game.addStat('heat', 8);
-    game.lockItems(['kol', 'distraction', 'shill', 'trend_remove'], 2);
+    game.lockItems(lock, turns);
     st.flags.regulated = true;
     st.counters.regulated += 1;
-    game.message('system', '【' + source + '】有关部门约谈' + game.level.client.name + '，要求限期整改；营销类手段被暂停两回合。', 'bad');
+    game.message('system', '【' + source + '】有关部门约谈' + game.level.client.name + '，要求限期整改' + (lock.length ? '；营销类手段被暂停 ' + turns + ' 回合' : '') + '。', 'bad');
     game.queuePosts({ kind: 'news', count: 1, stance: -2, tier: 'media', pool: 'ironFistBoomerang', hint: '有关部门约谈' + game.level.client.name + '，要求说明情况并限期整改', tags: ['约谈'] });
     game.addHeadline(game.level.client.name + '被约谈', 90, { tag: '爆' });
   }

@@ -1,6 +1,8 @@
 /*
  * Editor AI assist: one-line premise -> full level draft, and per-section fills.
- * Output is plain JSON validated with WW.Schema before it is loaded; nothing is executed.
+ * Output is plain JSON, never executed. A generated level is validated and its problems are listed, but it
+ * is loaded even with errors so they can be fixed by hand; per-section fills are appended as-is and show
+ * up in the editor's live validation.
  */
 (function (WW) {
   'use strict';

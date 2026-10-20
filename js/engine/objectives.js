@@ -188,7 +188,10 @@
       if (t.at === 'end' || !t.complete) return;
       var hit = false;
       try { hit = WW.Cond.evaluate(t.complete, game); } catch (e) { WW.Log.info('engine', '开局检查时子任务「' + t.title + '」的完成条件无法求值：' + e.message); return; }
-      if (hit) out.push({ path: path + '.complete', msg: '子任务「' + t.title + '」开局时就已满足完成条件，会立刻完成。“全程保持 / 零 X 通关”类目标请加 at:"end"，并用 fail 写违规条件' });
+      if (!hit) return;
+      out.push({ path: path + '.complete', msg: t.required
+        ? '必做子任务「' + t.title + '」开局时就已满足完成条件，会立刻完成并推进阶段。想做“全程保持”类目标，请改成可选任务或支线并加 at:"end" 与 fail，或者换成需要玩家行动才能达成的目标'
+        : '子任务「' + t.title + '」开局时就已满足完成条件，会立刻完成。“全程保持 / 零 X 通关”类目标请加 at:"end"，并用 fail 写违规条件' });
     };
     if (lv.objectives.stages[0]) lv.objectives.stages[0].tasks.forEach(function (t, j) { check(t, 'objectives.stages[0].tasks[' + j + ']'); });
     lv.objectives.side.forEach(function (t, i) { if (t.offer === 'start') check(t, 'objectives.side[' + i + ']'); });

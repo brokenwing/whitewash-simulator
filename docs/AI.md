@@ -36,7 +36,7 @@
 | 豆包（火山方舟） | OpenAI 兼容 | `https://ark.cn-beijing.volces.com/api/v3` | 填推理接入点 ID |
 | 硅基流动 | OpenAI 兼容 | `https://api.siliconflow.cn/v1` | `deepseek-ai/DeepSeek-V3` |
 | OpenRouter | OpenAI 兼容 | `https://openrouter.ai/api/v1` | `deepseek/deepseek-chat` |
-| Google Gemini | OpenAI 兼容 | `https://generativelanguage.googleapis.com/v1beta/openai` | `gemini-3.8-flash` / `gemini-3.5-flash` / `gemini-3-flash-preview` / `gemini-3.1-pro-preview` / `gemini-3.5-flash-lite`（Key 在 Google AI Studio 获取） |
+| Google Gemini | OpenAI 兼容 | `https://generativelanguage.googleapis.com/v1beta/openai` | `gemini-3.8-flash` / `gemini-3.5-flash` / `gemini-3-flash-preview` / `gemini-3.1-pro-preview` / `gemini-3.5-flash-lite` / `gemini-3.1-flash-lite`（Key 在 Google AI Studio 获取） |
 | 本地 Ollama | OpenAI 兼容 | `http://localhost:11434/v1` | `qwen2.5:14b`（无需 Key） |
 | 本地 LM Studio | OpenAI 兼容 | `http://localhost:1234/v1` | 填 LM Studio 中已加载模型的标识（无需 Key） |
 
@@ -59,7 +59,7 @@ flowchart LR
 ```
 
 - **Anthropic**：浏览器直连需要的 `anthropic-dangerous-direct-browser-access` 头由 SDK 自动加上。按任务设置 `effort`：筛帖、网评、水军、控评、软文、自定义道具等用 `low`；公文补全/润色/评审、铁拳判定、结案报告、编辑器分区补全用 `medium`；编辑器一句话生成关卡的前 3 段用 `medium`、任务和事件段用 `high`。`stop_reason` 为 `refusal` 或 JSON 任务被 `max_tokens` 截断时视为失败，回退离线。如果中转服务不认 `output_config`/`effort`/`fallbacks` 等参数（返回 400），会自动切换到兼容模式重发。
-- **OpenAI 兼容**：系统提示词末尾会附上 JSON 结构说明；`max_tokens` 上限 8000。开启「JSON 模式」时按顺序尝试三种 `response_format`：预设声明支持 schema 的（目前是 LM Studio）先发 `json_schema`（严格 JSON Schema），其余先发 `json_object`；接口返回 400 就换下一种，最后不带 `response_format`。成功的那一种按“接口地址 + 模型”记在内存里，之后的请求直接用它，不再先吃一次 400；改动设置后会重新探测。
+- **OpenAI 兼容**：系统提示词末尾会附上 JSON 结构说明；`max_tokens` 上限 8000。开启「JSON 模式」时按顺序尝试三种 `response_format`：预设声明支持 schema 的（目前是 LM Studio）先发 `json_schema`（严格 JSON Schema），其余先发 `json_object`、再试 `json_schema`；接口返回 400 就换下一种，最后不带 `response_format`。成功的那一种按“接口地址 + 模型”记在内存里，之后的请求直接用它，不再先吃一次 400；改动设置后会重新探测。
 - **输出上限**：远程接口 `max_tokens` 封顶 8000（不少服务商不接受更大的值）；本地接口（`localhost` / `127.0.0.1`）不封顶，直接用任务自己的预算（多为 16000），Gemini 预设封顶 16000。思考模型的思考 token 也算在 `max_tokens` 里，上限太低时正文会被截断。
 - **思考强度**：标了支持的预设（LM Studio、Gemini）会带 `reasoning_effort`，比任务的 `effort` 低一档：`low`→`none`（不思考）、`medium`→`low`、`high`→`medium`。游戏里的 low 任务（网评、水军、控评等）都是纯写作，思考只会拖慢速度、吃掉输出额度。接口如果因为这个参数返回 400，就去掉它重发，并对这个接口记住不再带。设置里的「思考强度」可以改成固定的关闭 / 低 / 中 / 高（评测时用 `WW_EVAL_REASONING`）。
 
@@ -79,7 +79,7 @@ python tools/serve.py
 http://127.0.0.1:8765/llm-proxy/<base64url(接口地址)>/chat/completions
 ```
 
-代理原样转发请求头和请求体，并把响应（包括流式 SSE）原样传回。它只监听 `127.0.0.1`，只认 `127.0.0.1:<端口>` / `localhost:<端口>` 这两个 Host（防 DNS 重绑定）；转发只接受 POST，且 Origin 必须是本服务的页面——其他网站、沙箱 iframe 以及 `file://` 打开的页面（`Origin: null`）一律 403；以 `.` 开头的路径（如 `.git`）不对外提供；上游只允许 http/https。
+代理转发请求体和请求头（去掉 Host、Origin、Referer、Cookie 等浏览器自带的头），并把响应（包括流式 SSE）原样传回。它只监听 `127.0.0.1`，只认 `127.0.0.1:<端口>` / `localhost:<端口>` 这两个 Host（防 DNS 重绑定）；转发只接受 POST，且 Origin 必须是本服务的页面——其他网站、沙箱 iframe 以及 `file://` 打开的页面（`Origin: null`）一律 403；以 `.` 开头的路径（如 `.git`）不对外提供；上游只允许 http/https。
 
 > 需要本地代理时，请通过 `http://127.0.0.1:8765/Start.html` 打开游戏，不要直接双击 HTML 文件（`file://`）：后者仍可离线游玩或直连允许跨域的接口，但不能走代理。
 
@@ -109,7 +109,7 @@ Key 的保存方式按系统自动选择（只用 Python 标准库，实现见 `
 
 系统提示词（`WW.AI.baseSystem`）在一整关里保持不变，因此能被服务商缓存。它包含：虚构讽刺游戏的设定与硬性规则（不出现真实人物/品牌/机构/媒体，不涉及现实政治，监管写作“有关部门/平台”，境外写作“外网/海外媒体”，允许网络梗但不许仇恨与色情）、委托方与事件、平台与阵营、网民画像、**事实与隐藏真相**、客户红线、对手、关卡的文风补充、当前难度的“网友敏锐度”。规则还要求：真相只用于判断，替网民写内容时不能剧透尚未曝光的真相。
 
-每个任务的 user 提示词带上当前局势（回合、阶段、五个数值、网民已知的信息、新出现的事实、最近的官方表态、近期热帖），再加任务要求。
+大多数任务的 user 提示词带上当前局势（回合、舆情阶段、好感/热度/公信力、热搜排名、网民已知的信息、尚未公开的事实、新出现的事实、最近的官方表态、近期热帖），再加任务要求；删帖/限流筛选和买热搜只给任务本身需要的内容。
 
 | 任务 | 何时 | 输出结构（要点） | 离线规则 |
 |---|---|---|---|
@@ -207,6 +207,7 @@ flowchart LR
 | `WW_EVAL_REASONING` | 可选，固定思考强度 `none` / `low` / `medium` / `high`；默认 `auto`（按任务映射） |
 | `WW_EVAL_PROVIDER` | 可选，按游戏里的预设 id 处理（如 `lmstudio`、`gemini`），让该预设的 JSON 格式、思考强度、输出上限设置生效；不设时 OpenAI 格式按“自定义”处理 |
 | `WW_EVAL_BASE` / `WW_EVAL_MODEL` / `WW_EVAL_KEY` | 被测服务商的接口地址、模型、Key |
+| `WW_EVAL_TIMEOUT` | 可选，单次调用超时秒数，默认 180 |
 | `WW_EVAL_JUDGE_*` | 评委用的服务商（同上四项）；不设就用被测模型。建议用更强的模型 |
 
 Anthropic 格式需要先装一次开发依赖：`cd tests/eval && npm install`（只在评测时使用，游戏本身不依赖它）。

@@ -38,7 +38,8 @@
     var a = U.deepMerge(base, ref.overrides || {});
     if (ref.weight !== null && ref.weight !== undefined) a.weight = ref.weight;
     if (ref.cooldown !== null && ref.cooldown !== undefined) a.cooldown = ref.cooldown;
-    a.condition = ref.condition || a.condition || null;
+    /* the opponent's own condition is extra: both it and the ability's condition must hold */
+    a.condition = ref.condition && base.condition ? { all: [base.condition, ref.condition] } : ref.condition || a.condition || null;
     a.params = a.params || {};
     return a;
   }
@@ -173,9 +174,8 @@
         }
       });
       if (banned) game.addExposure((a.params.exposurePerBan || 3) * banned);
-      if (!targets.length) game.addModifier({ kind: 'mute', turns: 1, label: '官方号被限流' });
       game.queuePosts({ kind: 'opponent', opp: o.id, count: 1, stance: -1, pool: 'opponent.mass_report', hint: '「' + o.name + '」号召大家集体举报' + game.level.client.name + '的洗地内容' });
-      return removed ? '集体举报下架了你的 ' + removed + ' 条内容' + (banned ? '，封了 ' + banned + ' 批水军号' : '') : '集体举报客户官方号，官方号被限流一回合';
+      return removed ? '集体举报下架了你的 ' + removed + ' 条内容' + (banned ? '，封了 ' + banned + ' 批水军号' : '') : '集体举报了你的内容，但平台没有下架';
     },
     go_abroad: function (game, o, a, pw) {
       var st = game.state;
@@ -202,7 +202,7 @@
       if (handle && handle.revealed) {
         var p = (a.params.success || 0.75) * Math.min(1.25, pw);
         if (game.rng.chance(Math.min(0.95, p))) {
-          WW.Truth.regulatorStrike(game, o.name + '实名举报');
+          WW.Truth.regulatorStrike(game, o.name + '实名举报', a.params);
           game.changeMorale(o, 10);
           return '实名举报成功：有关部门约谈客户，营销手段被暂停';
         }

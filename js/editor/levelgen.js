@@ -32,8 +32,9 @@
   var TASK_RULES = [
     '子任务字段：id、title、desc、complete（完成条件，必填）、required（主任务子任务默认必做）、fail（失败条件）、deadline（第几回合结束前要完成）、at:"end"（结算时才判定）、rewards / penalty（效果列表）。',
     '支线写在 objectives.side 里（不要写在顶层），另有 offer（"start" 开局发放，或一个条件）、choice:true（玩家可以拒绝）、from（发放方）。',
-    '“全程保持 / 零 X 通关 / 不超过 X”这类目标必须写 at:"end"，并用 fail 写违规条件，否则开局就会判定完成。',
-    '条件里用到的 flags.<名> 必须有某个 {"type":"flag","name":"<名>"} 效果去设置（引擎自带的只有 rectified 整改、suppressed 撤热搜、clientLied 查出客户撒谎）；itemUses.<技能> 和 unlock 的技能都必须在 items.enabled 里。',
+    '“全程保持 / 零 X 通关 / 不超过 X”这类目标必须写成支线或可选子任务，加 at:"end" 并用 fail 写违规条件，否则开局就会判定完成；必做子任务不会失败（fail 对它无效），不要用来写这类目标。',
+    '条件里用到的 flags.<名> 必须有某个 {"type":"flag","name":"<名>"} 效果去设置（引擎自带的只有 ' +
+      Object.keys(WW.Schema.ENGINE_FLAG_LABELS).map(function (k) { return k + ' ' + WW.Schema.ENGINE_FLAG_LABELS[k]; }).join('、') + '）；itemUses.<技能> 和 unlock 的技能都必须在 items.enabled 里。',
     '阶段奖励用 {"type":"unlock","tier":2}（或 3）逐步解锁技能层级，再配 {"type":"budget","delta":15} 追加预算。',
     '技能层级：' + [1, 2, 3].map(function (n) { return n + ' 级 ' + Object.keys(WW.Data.items).filter(function (k) { return (WW.Data.items[k].tier || 1) === n; }).join(' '); }).join('；') + '。',
     '必做子任务要用到的技能（itemUses.<技能>，flags.rectified 需要 rectify）必须在这一阶段开始前就已解锁：开局层级 items.startTier，或前面阶段奖励里的 unlock。本阶段的奖励要等本阶段完成才发放。'

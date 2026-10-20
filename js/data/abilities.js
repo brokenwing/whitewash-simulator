@@ -12,7 +12,7 @@
       id: 'mass_report', name: '抱团举报', icon: '🚩', category: '攻击', cost: 8, cooldown: 2, weight: 3,
       handler: 'mass_report',
       desc: '组织集体举报，下架你近两回合发布的公文、软文和水军帖，水军号被封会抬高暴露度。',
-      counter: '用精品水军、提前控评护住内容，或对其召唤铁拳。',
+      counter: '提前控评护住内容（2 回合内不会被冲掉），或对其召唤铁拳。',
       params: { takedown: { shill: 0.6, kol: 0.35, client: 0.15 }, exposurePerBan: 3 }
     },
     go_abroad: {
@@ -34,7 +34,7 @@
       handler: 'iron_fist',
       desc: '向有关部门实名举报客户。把柄（违规事实）一旦被证据曝光，举报大概率导致约谈整改、营销手段被锁；拿不出实据的举报会诬告反噬。',
       counter: '在证据曝光前完成真诚整改补上漏洞；用内部调查摸清哪些是把柄。',
-      params: { requiresHandle: true, success: 0.75, lockTurns: 2, lockItems: ['kol', 'distraction', 'shill'] }
+      params: { requiresHandle: true, success: 0.75, lockTurns: 2, lockItems: ['kol', 'distraction', 'shill', 'trend_remove'] }
     },
     dig_past: {
       id: 'dig_past', name: '翻旧账', icon: '📼', category: '攻击', cost: 10, cooldown: 3, weight: 2,

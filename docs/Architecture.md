@@ -70,7 +70,7 @@ flowchart TB
 |---|---|
 | `Start.html` | 游戏入口，加载全部脚本 |
 | `LevelEditor.html` | 关卡编辑器入口 |
-| `js/core/` | `ns.js` 命名空间 · `util.js` 种子随机数/格式化/深合并 · `bus.js` 事件总线 · `storage.js` 带兜底的本地存储 |
+| `js/core/` | `ns.js` 命名空间 · `log.js` 异常日志 · `util.js` 种子随机数/格式化/深合并 · `bus.js` 事件总线 · `storage.js` 带兜底的本地存储 |
 | `js/data/` | 默认数据：`platforms` 平台与作者层级 · `factions` 阵营与“作用渠道” · `personas` 网民画像 · `pools` 离线文本池 · `statements` 公文类型 · `items` 道具库 · `abilities` 对手技能库 · `difficulty` 难度表 |
 | `js/engine/schema.js` | 关卡默认值、`normalize()` 补全、`validate()` 校验（编辑器与引擎共用） |
 | `js/engine/cond.js` · `effects.js` | 条件 DSL 与效果 DSL：求值、中文描述、校验 |
@@ -90,7 +90,8 @@ flowchart TB
 | `js/ui/` | 界面：`app.js` 选关 · `game.js` 作战室 · `statement.js` 公文编辑器 · `items.js` 道具对话框 · `charts.js` 图表 · `settings.js` 设置 · `dom.js` 安全的 DOM 工具 |
 | `js/editor/` | 编辑器：`fields.js` 字段元数据 · `forms.js` 表单渲染 · `editor.js` 主程序 · `levelgen.js` 分段生成关卡（无 DOM，评测也用）· `ai-assist.js` AI 生成弹窗与分区补全 · `levelcheck.js` 通关测试的扫描与体检分析（无 DOM，`--check` 也用）· `levelcheck-ui.js` 通关测试弹窗 |
 | `levels/` | `manifest.js` 内置关卡清单 + 每关一个文件 |
-| `tools/serve.py` | 可选的本地静态服务 + LLM 跨域转发 |
+| `tools/serve.py` | 可选的本地静态服务 + LLM 跨域转发 + API Key 托管（`/api/key`） |
+| `tools/keystore.py` | Key 托管的存储：环境变量 / Windows DPAPI / Linux `secret-tool` / 0600 文件 |
 | `tests/run.js` | Node 测试：单元测试 + 自动平衡模拟 + `--check` 通关测试 |
 
 ---
@@ -204,7 +205,7 @@ sequenceDiagram
 | 适配器 | 用于 | 要点 |
 |---|---|---|
 | Anthropic | Claude 官方 / Anthropic 格式中转 | 官方 `@anthropic-ai/sdk`（CDN 按需 `import()`，钉死 0.131.0，`dangerouslyAllowBrowser`）；`output_config.effort` 按任务设定；JSON 任务用 `output_config.format`（严格 JSON Schema）；system 块开启 prompt caching；官方地址默认开启服务端拒答回退；中转不认这些参数时自动降级重试 |
-| OpenAI 兼容 | DeepSeek、通义、Kimi、智谱、豆包、硅基流动、OpenRouter、Ollama…… | `POST {base}/chat/completions`；JSON 任务带 `response_format`（LM Studio 等支持 schema 的用 `json_schema`，其余用 `json_object`；400 时逐级降级到不带，并按接口地址 + 模型记住可用的那一种）；SSE 流式解析 |
+| OpenAI 兼容 | DeepSeek、通义、Kimi、智谱、豆包、硅基流动、OpenRouter、Ollama…… | `POST {base}/chat/completions`；JSON 任务带 `response_format`（LM Studio 等支持 schema 的先用 `json_schema`，其余先用 `json_object` 再试 `json_schema`；400 时换下一种，最后不带，并按接口地址 + 模型记住可用的那一种）；SSE 流式解析 |
 
 详细的任务清单与 JSON 协议见 [AI.md](AI.md)。
 
@@ -292,7 +293,7 @@ flowchart LR
   L --> T["▶ 试玩：全屏浮层里 mount GameUI<br/>（testMode：不写存档和成绩）"]
   L --> X["导出 JSON / 导出 levels/*.js"]
   L --> B["保存到浏览器 → 游戏选关界面可见"]
-  AI["ai-assist.js<br/>一句话生成 / 分区补全"] -->|校验后载入| L
+  AI["ai-assist.js<br/>一句话生成 / 分区补全"] -->|校验并列出问题后载入| L
 ```
 
 ---

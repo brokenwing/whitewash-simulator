@@ -226,6 +226,6 @@ async function e2e(WW, caller, levelId, seed) {
   const md = report.write(run, runDir, cases.all(), prev);
   const pending = results.filter((r) => r.status === 'pending').length;
   console.log(md.split('\n').slice(0, 40).join('\n'));
-  console.log('\n报告：' + path.join(runDir, 'report.md'));
+  console.log('\n报告：' + path.join(runDir, 'report-' + report.fileTag(subject) + '.md'));
   if (pending) console.log('待回答的调用：' + caller.pending.length + ' 个，提示词在 ' + path.join(runDir, 'prompts') + '（回答写入 responses/<who>/<id>.txt 后用同样参数加 --run ' + runName + ' 重跑）');
 })().catch((e) => { console.error(e); process.exitCode = 1; });

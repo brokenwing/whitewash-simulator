@@ -315,7 +315,8 @@
         desc: str(o.desc, ''), faction: str(o.faction, 'rival'), kind: str(o.kind, 'group'),
         strength: U.clamp(num(o.strength, 50), 0, 100), morale: U.clamp(num(o.morale, 60), 0, 100),
         resources: Math.max(0, num(o.resources, 20)), income: Math.max(0, num(o.income, 6)),
-        cooptable: o.cooptable === undefined ? true : !!o.cooptable, platform: D.platforms[o.platform] ? o.platform : 'weibo',
+        /* victims can never be bought off; other kinds default to cooptable */
+        cooptable: str(o.kind, 'group') === 'victims' ? false : o.cooptable === undefined ? true : !!o.cooptable, platform: D.platforms[o.platform] ? o.platform : 'weibo',
         abilities: arr(o.abilities).map(normAbilityRef).filter(function (a) { return a.use; }),
         events: arr(o.events).map(function (e, j) {
           return { id: str(e.id, 'oe' + (i + 1) + '_' + (j + 1)), title: str(e.title, ''), trigger: e.trigger || null, chance: num(e.chance, 1), once: e.once === undefined ? true : !!e.once, effects: arr(e.effects) };
@@ -438,6 +439,7 @@
 
   /* flags the engine sets by itself, and the skill that does it (null: opponents / regulators) */
   var ENGINE_FLAGS = { suppressed: 'trend_remove', clientLied: 'investigate', rectified: 'rectify', abroad: null, regulated: null };
+  var ENGINE_FLAG_LABELS = { rectified: '整改', suppressed: '撤热搜', clientLied: '查出客户撒谎', abroad: '被捅到外网', regulated: '被约谈' };
 
   function walk(x, path, fn) {
     if (Array.isArray(x)) x.forEach(function (v, i) { walk(v, path + '[' + i + ']', fn); });
@@ -591,7 +593,8 @@
         if (!t.complete) E(p + '.complete', '子任务「' + t.title + '」缺少完成条件');
         WW.Cond.validate(t.complete, lv, p + '.complete', errors);
         WW.Cond.validate(t.fail, lv, p + '.fail', errors);
-        if (t.required && t.fail) W(p + '.fail', '必做子任务设置了失败条件，失败后主任务将无法推进');
+        if (t.required && t.fail) W(p + '.fail', '必做子任务的失败条件不会生效（必做任务不会失败），可以删掉，或把它改成可选任务');
+        if (t.required && t.at === 'end' && i < lv.objectives.stages.length - 1) W(p + '.at', '必做子任务「' + t.title + '」写了 at:"end"，要到合同到期才判定，后面的阶段在此之前都不会解锁');
         WW.Effects.validate(t.rewards, lv, p + '.rewards', errors);
       });
     });
@@ -678,6 +681,8 @@
     DEFAULTS: DEFAULTS,
     DEFAULT_RANDOM_EVENTS: DEFAULT_RANDOM_EVENTS,
     DEFAULT_DEFEATS: DEFAULT_DEFEATS,
+    ENGINE_FLAGS: ENGINE_FLAGS,
+    ENGINE_FLAG_LABELS: ENGINE_FLAG_LABELS,
     stageDefaults: stageDefaults,
     normalize: normalize,
     validate: validate,
