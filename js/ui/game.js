@@ -32,6 +32,26 @@
     return h('span', { class: 'pf', style: { background: p.color }, title: p.name }, p.short);
   }
 
+  /* Feed change highlighting. Thresholds measured on the built-in levels: ~45 older posts gain likes every
+   * turn (median +5%), so only big jumps are marked, and only a few per update. Rank is compared on the
+   * heat score without Feed.ranked's current-turn boost: with the boost, last turn's posts drop back every
+   * turn and older ones "rise" mechanically. */
+  var FEED_HL = { minLikes: 1000, minRatio: 0.15, maxNum: 5, rankRise: 2, rankTop: 10, maxRank: 3 };
+  var TRACKED = ['deleted', 'report', 'platform', 'throttled', 'controlled', 'exposed', 'revealed', 'refuted', 'known'];
+  var DELETE_LABELS = { deleted: '刚被删除', report: '刚被举报下架', platform: '刚被平台处置' };
+
+  /* What the player can see change on a post: engagement and status flags. */
+  function postSig(st, p) {
+    var flags = {};
+    if (p.status === 'deleted') flags[p.removedBy === 'platform' || p.removedBy === 'report' ? p.removedBy : 'deleted'] = true;
+    if (p.throttled) flags.throttled = true;
+    if (p.controlled) flags.controlled = true;
+    if (p.exposed) flags.exposed = true;
+    var f = p.fact && st.facts[p.fact];
+    if (f) flags[f.revealed ? 'revealed' : f.refuted ? 'refuted' : f.known ? 'known' : 'open'] = true;
+    return { likes: p.likes, comments: p.commentCount, flags: flags };
+  }
+
   /* ================================================================== controller */
 
   function GameUI(container, level, opts) {
@@ -41,7 +61,10 @@
     this.opts = opts || {};
     this.game = null;
     this.feedTab = 'all';
-    this.seen = {};
+    /* UI-only feed diff (never saved): snapshot of the posts as last rendered + per-post change marks of this turn */
+    this.feedSnap = null;
+    this.feedMarks = {};
+    this.feedMarksTurn = 0;
     this.pane = 'center';
     this.lastAiToast = 0;
     this.unsub = [];
@@ -467,10 +490,55 @@
     return h('div', { class: 'panel', style: { padding: '10px' }, dataset: { coach: 'opponents' } }, h('div', { class: 'panel-title' }, '🎯 对手盘', mon ? null : h('span', { class: 'muted tiny' }, '部署「舆情监测」可看清对手意图')), h('div', { class: 'opp-strip' }, cards));
   };
 
+  /* Compares the feed with what was last rendered and records change marks. The first render (new game or
+   * a loaded save) only takes the baseline; marks live until the turn changes, the flash plays once. */
+  P.diffFeed = function () {
+    var st = this.game.state;
+    var cur = {};
+    st.posts.forEach(function (p) { cur[p.id] = postSig(st, p); });
+    var heat = function (p) { return p.likes / Math.pow(1.8, st.turn - p.turn); };
+    var order = st.posts.filter(function (p) { return p.status !== 'deleted'; }).sort(function (a, b) { return heat(b) - heat(a); }).map(function (p) { return p.id; });
+    var prev = this.feedSnap;
+    this.feedSnap = { posts: cur, order: order };
+    if (st.turn !== this.feedMarksTurn) { this.feedMarks = {}; this.feedMarksTurn = st.turn; }
+    if (!prev) return;
+    var found = {};
+    var mark = function (id) { return found[id] || (found[id] = { status: [] }); };
+    var grown = [];
+    st.posts.forEach(function (p) {
+      var a = prev.posts[p.id], b = cur[p.id];
+      if (!a) { if (p.status !== 'deleted') mark(p.id).isNew = true; return; }
+      Object.keys(b.flags).forEach(function (k) { if (!a.flags[k] && TRACKED.indexOf(k) >= 0) mark(p.id).status.push(k); });
+      var dl = b.likes - a.likes;
+      if (p.status !== 'deleted' && dl >= FEED_HL.minLikes && dl >= a.likes * FEED_HL.minRatio) grown.push({ id: p.id, dl: dl, dc: b.comments - a.comments });
+    });
+    grown.sort(function (x, y) { return y.dl - x.dl; }).slice(0, FEED_HL.maxNum).forEach(function (x) { var m = mark(x.id); m.dl = x.dl; m.dc = x.dc; });
+    /* rank: among posts visible both times, one that climbed rankRise+ places into the top rankTop */
+    var inNow = {};
+    order.forEach(function (id) { inNow[id] = true; });
+    var inBefore = {};
+    prev.order.filter(function (id) { return inNow[id]; }).forEach(function (id, i) { inBefore[id] = i; });
+    var rises = 0;
+    order.filter(function (id) { return id in inBefore; }).slice(0, FEED_HL.rankTop).forEach(function (id, i) {
+      if (inBefore[id] - i >= FEED_HL.rankRise && rises < FEED_HL.maxRank) { rises++; mark(id).rankUp = true; }
+    });
+    var marks = this.feedMarks;
+    Object.keys(found).forEach(function (id) {
+      var c = found[id];
+      var m = marks[id] || (marks[id] = { status: [], dl: 0, dc: 0 });
+      if (c.isNew) m.isNew = true;
+      if (c.rankUp) m.rankUp = true;
+      if (c.dl) { m.dl += c.dl; m.dc += Math.max(0, c.dc); }
+      c.status.forEach(function (k) { if (m.status.indexOf(k) < 0) m.status.push(k); });
+      m.flash = true;
+    });
+  };
+
   P.renderFeed = function () {
     var self = this;
     var g = this.game;
     var st = g.state;
+    this.diffFeed();
     var prevScroll = this.feedScroll ? this.feedScroll.scrollTop : 0;
     var platforms = ['all'].concat(this.level.platforms);
     var tabs = h('div', { class: 'feed-tabs', role: 'tablist' }, platforms.map(function (p) {
@@ -479,11 +547,14 @@
     }));
     var posts = WW.Feed.ranked(st, this.feedTab).slice(0, 70);
     var list = posts.length ? posts.map(function (p) { return self.renderPost(p); }) : [h('div', { class: 'empty' }, '这个平台暂时没有讨论。')];
-    posts.forEach(function (p) { self.seen[p.id] = true; });
     var scroll = h('div', { class: 'feed-scroll' }, list);
     this.feedScroll = scroll;
+    var nNew = 0, nChg = 0;
+    Object.keys(this.feedMarks).forEach(function (id) { if (self.feedMarks[id].isNew) nNew++; else nChg++; });
+    var sum = nNew || nChg ? h('span', { class: 'feed-chg-sum', title: '本回合新出现 / 有变化的帖子（下回合清除）' },
+      nNew ? h('span', { class: 'n-new' }, '新帖 ' + nNew) : null, nChg ? h('span', { class: 'n-chg' }, '变动 ' + nChg) : null) : null;
     var panel = h('div', { class: 'panel feed-panel', dataset: { coach: 'feed' } },
-      h('div', { class: 'feed-head' }, h('b', null, '🗞 舆论场'), h('span', { class: 'muted small' }, '悬停帖子可删帖 / 控评 / 举报'), h('div', { class: 'spacer' }), tabs),
+      h('div', { class: 'feed-head' }, h('b', null, '🗞 舆论场'), h('span', { class: 'muted small' }, '悬停帖子可删帖 / 控评 / 举报'), sum, h('div', { class: 'spacer' }), tabs),
       scroll);
     setTimeout(function () { scroll.scrollTop = prevScroll; }, 0);
     return panel;
@@ -494,30 +565,46 @@
     var g = this.game;
     var st = g.state;
     var mon = st.monitor;
+    var m = this.feedMarks[p.id];
+    var just = m ? m.status : [];
+    /* a status that changed this turn rings its existing tag instead of adding a duplicate one */
+    var tag = function (cls, text, key) {
+      var on = key && just.indexOf(key) >= 0;
+      return h('span', { class: 'ptag' + (cls ? ' ' + cls : '') + (on ? ' just' : ''), title: on ? '本回合刚发生' : null }, text);
+    };
+    var chg = just.filter(function (k) { return DELETE_LABELS[k]; }).map(function (k) { return h('span', { class: 'ptag chg' }, DELETE_LABELS[k]); });
+    if (m && m.rankUp) chg.push(h('span', { class: 'ptag chg' }, '↑ 排名上升'));
+    var hl = m ? (m.isNew ? ' new' : ' chg') + (m.flash ? ' flash' : '') : '';
+    /* the flash plays once (paused while a dialog covers the feed), so later re-renders don't replay it */
+    var flashDone = m && m.flash ? { animationend: function (e) {
+      if (e.animationName !== 'post-flash') return;
+      m.flash = false;
+      e.currentTarget.classList.remove('flash');
+    } } : null;
     if (p.status === 'deleted') {
-      return h('div', { class: 'post deleted nostance' }, h('div', { class: 'small' }, '🗑 ' + (p.removedBy === 'platform' ? '该账号已被平台处置，内容不可见' : p.removedBy === 'report' ? '该内容因被大量举报已下架' : '该内容已被删除') + ' · ' + p.author.name));
+      return h('div', { class: 'post deleted nostance' + hl, on: flashDone }, h('div', { class: 'small' }, '🗑 ' + (p.removedBy === 'platform' ? '该账号已被平台处置，内容不可见' : p.removedBy === 'report' ? '该内容因被大量举报已下架' : '该内容已被删除') + ' · ' + p.author.name, chg.length ? [' ', chg] : null));
     }
-    var tags = [];
+    var tags = chg;
     if (p.isClient) tags.push(h('span', { class: 'ptag good' }, '官方'));
-    if (p.controlled) tags.push(h('span', { class: 'ptag' }, '已控评'));
-    if (p.throttled) tags.push(h('span', { class: 'ptag' }, '限流中'));
-    if (p.exposed) tags.push(h('span', { class: 'ptag bad' }, '疑似水军'));
+    if (p.controlled) tags.push(tag('', '已控评', 'controlled'));
+    if (p.throttled) tags.push(tag('', '限流中', 'throttled'));
+    if (p.exposed) tags.push(tag('bad', '疑似水军', 'exposed'));
     if (p.isScreenshot) tags.push(h('span', { class: 'ptag warn' }, '截图'));
     if (p.platform === 'overseas') tags.push(h('span', { class: 'ptag warn' }, '外网'));
     if (p.fact && st.facts[p.fact]) {
       var f = st.facts[p.fact];
-      if (f.revealed) tags.push(h('span', { class: 'ptag bad' }, '已实锤'));
-      else if (f.refuted) tags.push(h('span', { class: 'ptag good' }, '已证伪'));
-      else if (f.known) tags.push(h('span', { class: 'ptag ' + (f.isTrue ? 'bad' : 'good') }, f.isTrue ? '你知道：属实' : '你知道：不实'));
+      if (f.revealed) tags.push(tag('bad', '已实锤', 'revealed'));
+      else if (f.refuted) tags.push(tag('good', '已证伪', 'refuted'));
+      else if (f.known) tags.push(tag(f.isTrue ? 'bad' : 'good', f.isTrue ? '你知道：属实' : '你知道：不实', 'known'));
     }
     if (mon && p.isShill && !p.exposed && !p.oppShill) tags.push(h('span', { class: 'ptag' }, '我方水军'));
     if (mon && p.oppShill) tags.push(h('span', { class: 'ptag warn' }, '对家水军'));
     (p.tags || []).forEach(function (t) { if (['官方', '截图'].indexOf(t) < 0) tags.push(h('span', { class: 'ptag' }, t)); });
     var tier = p.author.tier;
     var acts = (p.isClient ? [['control', '控评']] : [['delete', '删帖'], ['throttle', '限流'], ['control', '控评'], ['legal', '律师函'], ['iron_fist', '铁拳']]).filter(function (a) { return g.items[a[0]]; });
-    var isNew = p.turn === st.turn && !this.seen[p.id] && st.turn > 1;
-    var cls = 'post ' + (mon && !p.isClient ? 's' + p.stance : 'nostance') + (isNew ? ' new' : '');
-    return h('article', { class: cls, tabindex: 0, dataset: { post: p.id } },
+    var cls = 'post ' + (mon && !p.isClient ? 's' + p.stance : 'nostance') + hl;
+    var up = function (n) { return n > 0 ? h('span', { class: 'stat-up' }, '▲' + U.fmtNum(n)) : null; };
+    return h('article', { class: cls, tabindex: 0, dataset: { post: p.id }, on: flashDone },
       h('div', { class: 'post-head' }, platformBadge(p.platform), h('span', { class: 'post-author' }, p.author.name),
         tier !== 'normal' ? h('span', { class: 'tier ' + tier }, (D.tiers[tier] || {}).name) : null,
         p.opp && st.opponents[p.opp] ? h('span', { class: 'tier' }, st.opponents[p.opp].avatar) : null,
@@ -525,7 +612,7 @@
       p.title ? h('div', { class: 'post-title' }, p.title) : null,
       h('div', { class: 'post-body' }, p.content),
       tags.length ? h('div', { class: 'post-tags' }, tags) : null,
-      h('div', { class: 'post-stats' }, h('span', null, '❤ ' + U.fmtNum(p.likes)), h('span', null, '↻ ' + U.fmtNum(p.reposts)), h('span', null, '💬 ' + U.fmtNum(p.commentCount))),
+      h('div', { class: 'post-stats' }, h('span', null, '❤ ' + U.fmtNum(p.likes), m && up(m.dl)), h('span', null, '↻ ' + U.fmtNum(p.reposts)), h('span', null, '💬 ' + U.fmtNum(p.commentCount), m && up(m.dc))),
       p.comments.length || p.foldedComments ? h('div', { class: 'post-comments' },
         p.comments.slice(0, 3).map(function (c) { return h('div', { class: 'cmt' }, h('b', null, c.author + '：'), c.content, c.shill && mon ? h('span', { class: 'shill-mark' }, ' [控评]') : null); }),
         p.foldedComments ? h('div', { class: 'cmt', style: { color: '#9a9892' } }, '已折叠 ' + U.fmtNum(p.foldedComments) + ' 条评论') : null) : null,
