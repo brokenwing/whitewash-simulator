@@ -125,7 +125,7 @@ node tests/eval/eval.js --mock
 ## 许可
 
 - 代码（`js/`、`css/`、`*.html`、`tests/`、`tools/`、启动脚本）：[MIT](LICENSE)。
-- 文字内容（`levels/`、`docs/`、`story-samples/`、本说明）：[CC BY 4.0](LICENSE-CONTENT)。
+- 文字内容（`levels/`、`docs/`、本说明）：[CC BY 4.0](LICENSE-CONTENT)。
 - [NOTICE](NOTICE) 汇总了上面的声明，分发本项目或其衍生作品时请一并保留。
 
 Copyright 2026 brokenwing
