@@ -16,7 +16,7 @@ const FILES = [
   'js/core/ns.js', 'js/core/log.js', 'js/core/util.js', 'js/core/bus.js', 'js/core/storage.js',
   'js/data/platforms.js', 'js/data/factions.js', 'js/data/personas.js', 'js/data/pools.js', 'js/data/statements.js',
   'js/data/items.js', 'js/data/abilities.js', 'js/data/difficulty.js',
-  'js/engine/cond.js', 'js/engine/effects.js', 'js/engine/schema.js', 'js/engine/feed.js', 'js/engine/items.js',
+  'js/engine/cond.js', 'js/engine/effects.js', 'js/engine/schema.js', 'js/engine/feasibility.js', 'js/engine/feed.js', 'js/engine/items.js',
   'js/engine/truth.js', 'js/engine/actions.js', 'js/engine/sim.js', 'js/engine/objectives.js', 'js/engine/guide.js', 'js/engine/opponents.js',
   'js/engine/events.js', 'js/engine/scoring.js', 'js/engine/engine.js', 'js/engine/levels.js',
   'js/llm/offline.js', 'js/llm/shape.js', 'js/llm/client.js', 'js/llm/prompts.js',

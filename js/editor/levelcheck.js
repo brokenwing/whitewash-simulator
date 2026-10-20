@@ -38,22 +38,71 @@
     return list;
   }
 
-  function play(level, entry, diff, seed) {
+  /* ------------------------------------------------------------------ closest approach */
+
+  /* the numeric comparisons a task's condition must all meet (top level and nested all), with paths */
+  function leavesOf(cond, path) {
+    if (!cond) return [];
+    if (typeof cond.var === 'string') return ['<', '<=', '>', '>='].indexOf(cond.op) >= 0 && !isNaN(Number(cond.value)) ? [{ leaf: cond, path: path }] : [];
+    if (Array.isArray(cond.all)) return cond.all.reduce(function (a, c, i) { return a.concat(leavesOf(c, path + '.all[' + i + ']')); }, []);
+    return [];
+  }
+
+  function watchesFor(lv) {
+    var out = [];
+    vals(taskIndex(lv)).forEach(function (t) {
+      var leaves = leavesOf(t.def.complete, t.path + '.complete');
+      if (leaves.length) out.push({ id: t.def.id, leaves: leaves });
+    });
+    return out;
+  }
+
+  /* For each watched comparison in one game, while its task is live: the best value it reached and
+     the value when the task was first seen live ({ v, from }), so "never moved" can be told apart. */
+  function tracker(watches) {
+    var best = {};
+    return {
+      best: best,
+      see: function (game) {
+        var tasks = game.state.objectives.tasks;
+        watches.forEach(function (w) {
+          if (!tasks[w.id] || tasks[w.id].status !== 'active') return;
+          var row = best[w.id] = best[w.id] || [];
+          w.leaves.forEach(function (x, i) {
+            var v = Number(WW.Cond.resolve(x.leaf.var, game));
+            if (isNaN(v)) return;
+            var up = x.leaf.op === '>' || x.leaf.op === '>=';
+            if (!row[i]) row[i] = { v: v, from: v };
+            else if (up ? v > row[i].v : v < row[i].v) row[i].v = v;
+          });
+        });
+      }
+    };
+  }
+
+  function play(level, entry, diff, seed, track) {
     var g = entry.genome;
-    if (g.base === 'guide') return B.playGuide(level, seed, diff);
-    return B.playBot(level, g.base ? g.base : B.policy(g), seed, diff);
+    var onTurn = track ? track.see : undefined;
+    if (g.base === 'guide') return B.playGuide(level, seed, diff, onTurn);
+    return B.playBot(level, g.base ? g.base : B.policy(g), seed, diff, {}, onTurn);
   }
 
   /* what one finished game says, kept small: thousands of these are held in memory */
-  function summarize(game, seed) {
+  function summarize(game, seed, track) {
     var st = game.state;
     var tasks = {};
     vals(st.objectives.tasks).forEach(function (t) { tasks[t.id] = t.status; });
+    if (track) track.see(game);
+    var near = {};
+    var r1 = function (v) { return Math.round(v * 10) / 10; };
+    if (track) Object.keys(track.best).forEach(function (id) {
+      if (tasks[id] !== 'done') near[id] = track.best[id].map(function (x) { return x ? [r1(x.v), r1(x.from)] : null; });
+    });
     return {
       seed: seed, win: st.result === 'win', score: st.final ? st.final.score : 0, grade: st.final ? st.final.grade : '',
       end: st.endTitle, turns: st.turn,
       route: vals(st.facts).some(function (f) { return f.admitted; }) || st.flags.rectified ? 'admit' : 'cover',
-      tasks: tasks, uses: Object.keys(st.itemUses),
+      tasks: tasks, uses: Object.keys(st.itemUses), near: near,
       unlocked: game.itemOrder.filter(function (id) { return WW.Items.isUnlocked(game, id); })
     };
   }
@@ -73,9 +122,11 @@
     var estimate = plan + 4 * cfg.parents * 12 * diffs.length * cfg.seeds + 25 * diffs.length * (cfg.refine - cfg.seeds);
     var done = 0, stopped = false, last = Date.now(), started = Date.now();
 
+    var watches = watchesFor(level);
     var one = async function (entry, diff, seed) {
-      var game = await play(level, entry, diff, seed);
-      (entry.games[diff] = entry.games[diff] || []).push(summarize(game, seed));
+      var track = tracker(watches);
+      var game = await play(level, entry, diff, seed, track);
+      (entry.games[diff] = entry.games[diff] || []).push(summarize(game, seed, track));
       done++;
       if (Date.now() - last > 40) {
         last = Date.now();
@@ -240,7 +291,11 @@
     var lv = WW.Schema.normalize(level);
     intent = INTENTS[intent] ? intent : 'any';
     var verdicts = [];
-    var V = function (lvl, title, detail, path) { verdicts.push({ level: lvl, title: title, detail: detail || '', path: path || '' }); };
+    var V = function (lvl, title, detail, path, fixes) {
+      var v = { level: lvl, title: title, detail: detail || '', path: path || '' };
+      if (fixes && fixes.length) v.fixes = fixes;
+      verdicts.push(v);
+    };
     var pct = function (x) { return Math.round(x * 100) + '%'; };
     var byDiff = {};
 
@@ -364,6 +419,10 @@
       V('info', '扫参从未用过：' + coverage.unused.map(skillName).join('、'), '这些技能解锁了，但没有任何打法用过；依赖它们的结论不可靠。用过 ' + coverage.used.length + ' / ' + skills.length + ' 个技能。', 'items');
     }
 
+    var mainGames = [];
+    res.entries.forEach(function (e) { (e.games[main] || []).forEach(function (x) { mainGames.push(x); }); });
+    /* the author's own objectives are there to patch (not the defaults normalize filled in) */
+    var rawTasks = !!(level && U.isObj(level.objectives) && (Array.isArray(level.objectives.stages) || Array.isArray(level.objectives.side)));
     tasks.forEach(function (t) {
       var x = t.byDiff[main];
       if (!x || !x.games) return;
@@ -371,12 +430,29 @@
       var def = t.def;
       var gap = untried(def && def.complete);
       var gapNote = gap.length ? '扫参没用过「' + gap.join('」「') + '」，可能是测试没覆盖到，而不是关卡问题。' : '';
-      if (!t.side && t.required && x.reached && !x.done) V(gap.length ? 'yellow' : 'red', '必做子任务「' + t.title + '」在' + where + '从来没有完成', gapNote || '出现了 ' + x.reached + ' 局，一局都没完成，后面的阶段因此都打不开。', t.path);
+      var shut = WW.Schema.condSkills(def && def.complete).filter(function (id) { return coverage.locked.indexOf(id) >= 0; }).map(skillName);
+      if (shut.length) gapNote += '要用的「' + shut.join('」「') + '」在这一档从未解锁（解锁它的阶段没推进到）。';
+      var why = x.reached && !x.done ? shortfall(t, mainGames, lv, rawTasks) : { text: '', fixes: [] };
+      t.nearest = why.nearest || null;
+      if (!t.side && t.required && x.reached && !x.done) V(gap.length ? 'yellow' : 'red', '必做子任务「' + t.title + '」在' + where + '从来没有完成', gapNote || '出现了 ' + x.reached + ' 局，一局都没完成，后面的阶段因此都打不开。' + why.text, t.path, why.fixes);
       else if (t.side && !x.reached) {
         var offerGap = untried(def && def.offer);
         V('yellow', '支线「' + t.title + '」在' + where + '从来没有发放', offerGap.length ? '扫参没用过「' + offerGap.join('」「') + '」，可能是测试没覆盖到。' : '检查 offer 条件。', t.path);
-      } else if (t.side && !x.done) V('yellow', '支线「' + t.title + '」在' + where + '从来没有完成', '发放了 ' + x.reached + ' 局。' + gapNote, t.path);
+      } else if (t.side && !x.done) V('yellow', '支线「' + t.title + '」在' + where + '从来没有完成', '发放了 ' + x.reached + ' 局。' + gapNote + why.text, t.path, why.fixes);
     });
+
+    /* stages no game on the main difficulty ever reached: their tasks were never tested at all */
+    var stageTasks = lv.objectives.stages.map(function (s, i) { return tasks.filter(function (t) { return !t.side && t.stage === i; }); });
+    var firstUnseen = -1;
+    stageTasks.forEach(function (list, i) {
+      if (firstUnseen < 0 && i > 0 && list.length && list.every(function (t) { return !t.byDiff[main] || !t.byDiff[main].reached; })) firstUnseen = i;
+    });
+    if (firstUnseen > 0) {
+      var unseen = U.sum(stageTasks.slice(firstUnseen), function (l) { return l.length; });
+      var stuck = stageTasks[firstUnseen - 1].filter(function (t) { return t.required && t.byDiff[main] && t.byDiff[main].reached && !t.byDiff[main].done; })[0];
+      V('info', '第 ' + (firstUnseen + 1) + (firstUnseen + 1 < stageTasks.length ? '~' + stageTasks.length : '') + ' 阶段在' + DIFF_NAME(main) + '档从未解锁，' + unseen + ' 个子任务没被测到',
+        (stuck ? '卡在第 ' + firstUnseen + ' 阶段的「' + stuck.title + '」。' : '') + '先让前面的阶段能完成，再看这些任务的测试结果。', stuck ? stuck.path : 'objectives');
+    }
 
     /* static checks that make part of the level never work (see Schema.validate) */
     WW.Schema.validate(level).warnings.filter(function (w) { return w.blocking; }).forEach(function (w) { V('yellow', '静态检查：' + w.msg, '', w.path); });
@@ -385,6 +461,46 @@
     var rank = { red: 0, yellow: 1, info: 2, green: 3 };
     verdicts.sort(function (a, b) { return rank[a.level] - rank[b.level]; });
     return { verdicts: verdicts, byDiff: byDiff, main: main, entries: res.entries, tasks: tasks, intent: intent, coverage: coverage };
+  }
+
+  /* Why a task that was offered never got done: how close each comparison came (best value over all
+     games, while the task was live), how those games ended, and a fix that sets the threshold to what
+     the sweep reached (only when the author wrote the objectives, so the path is theirs). */
+  var TUNABLE = /^(stats|faction|opp|trend|posts|counters)\./;
+  function shortfall(t, games, lv, rawTasks) {
+    var leaves = leavesOf(t.def.complete, t.path + '.complete');
+    var live = games.filter(function (x) { return x.tasks[t.id] && ['locked', 'hidden', 'done'].indexOf(x.tasks[t.id]) < 0; });
+    var nearest = leaves.map(function (l, i) {
+      var up = l.leaf.op === '>' || l.leaf.op === '>=', best, from, moved = false;
+      live.forEach(function (x) {
+        var p = x.near && x.near[t.id] ? x.near[t.id][i] : null;
+        if (!p) return;
+        if (up ? p[0] - p[1] >= 1 : p[1] - p[0] >= 1) moved = true;
+        if (best === undefined || (up ? p[0] > best : p[0] < best)) { best = p[0]; from = p[1]; }
+      });
+      return { var: l.leaf.var, op: l.leaf.op, value: Number(l.leaf.value), best: best, from: from, moved: moved, path: l.path, up: up };
+    });
+    var met = function (n) { return n.up ? (n.op === '>' ? n.best > n.value : n.best >= n.value) : (n.op === '<' ? n.best < n.value : n.best <= n.value); };
+    var short = nearest.filter(function (n) { return n.best !== undefined && !met(n); });
+    var say = function (n) { return WW.Cond.describe({ var: n.var, op: n.op, value: n.value }, lv); };
+    var text = short.length ? ' 最接近的一局：' + short.map(function (n) {
+      if (!n.moved) return say(n) + '，但它在所有局里都没往目标方向动过（一直在 ' + n.best + ' 左右）：缺的是能影响它的手段，不是门槛高低';
+      return say(n) + '，最好只到 ' + n.best + '（差 ' + Math.round(Math.abs(n.value - n.best) * 10) / 10 + '）';
+    }).join('；') + '。' : '';
+    var ends = {};
+    live.forEach(function (x) { if (!x.win) ends[x.end] = (ends[x.end] || 0) + 1; });
+    var top = Object.keys(ends).sort(function (a, b) { return ends[b] - ends[a]; })[0];
+    if (top && live.length >= 10 && ends[top] / live.length >= 0.6) text += ' 这些局里 ' + Math.round(ends[top] / live.length * 100) + '% 以「' + top + '」告终。';
+    /* the sweep's best, rounded to 5 on the reachable side; only when it actually moved toward the
+       target and the new threshold still asks for that move (not one the task starts out meeting) */
+    var fixes = !rawTasks ? [] : short.filter(function (n) { return TUNABLE.test(n.var) && n.moved; }).map(function (n) {
+      var to = n.up ? Math.floor(n.best / 5) * 5 : Math.ceil(n.best / 5) * 5;
+      if (n.up ? to <= n.from : to >= n.from) to = n.best;
+      if (n.up ? to <= n.from : to >= n.from) return null;
+      return { label: '门槛改成 ' + n.op + ' ' + to, desc: '扫参里「' + say(n) + '」最好只到 ' + n.best + '，把门槛从 ' + n.value + ' 改成 ' + to + '（再跑一次测试确认难度合适）。会修改 ' + n.path + '.value',
+        patch: [{ path: n.path + '.value', value: to }] };
+    }).filter(Boolean);
+    return { text: text, fixes: fixes, nearest: nearest };
   }
 
   /* replays one game of the sweep (deterministic for its seed) with everything kept */

@@ -347,13 +347,64 @@
   }
 
   /* One skill a running task's condition asks for (itemUses / engine flags), not yet used this turn. */
+  /* Skills that push one faction a task wants raised: custom skills whose effects target it, then
+   * skills on a channel it answers clearly harder (sens >= 1.3). A player reading "拉到 35" reaches
+   * for these again and again. */
+  function factionSkills(game, cond) {
+    var st = game.state, out = [];
+    var leaves = [];
+    (function collect(c) {
+      if (!c) return;
+      if (typeof c.var === 'string') leaves.push(c);
+      else if (Array.isArray(c.all)) c.all.forEach(collect);
+    })(cond);
+    leaves.forEach(function (l) {
+      var p = String(l.var).split('.');
+      if (p[0] !== 'faction' || (l.op !== '>=' && l.op !== '>') || !st.factions[p[1]] || st.factions[p[1]].sentiment >= Number(l.value)) return;
+      var f = game.level.factions.filter(function (x) { return x.id === p[1]; })[0];
+      game.itemOrder.forEach(function (id) {
+        var it = game.items[id];
+        var hits = false;
+        (function look(x) {
+          if (Array.isArray(x)) x.forEach(look);
+          else if (U.isObj(x)) {
+            if (x.type === 'faction' && x.faction === p[1] && Number(x.delta) > 0) hits = true;
+            Object.keys(x).forEach(function (k) { look(x[k]); });
+          }
+        })(it.handler === 'custom_ai' && it.effect ? it.effect.effects : null);
+        if (hits) out.unshift(id);
+        else if (f && it.channel && it.handler !== 'statement' && (f.sens[it.channel] || 0) >= 1.3) out.push(id);
+      });
+    });
+    return out.filter(function (id, i) { return out.indexOf(id) === i; });
+  }
+
+  /* Part of every routine: a level's own skill made for one faction (a custom skill whose effects
+   * target it), used once a turn while a running task still wants that faction raised. Any player
+   * reading "拉到 35" next to a "动员 X" skill uses it. */
+  async function rallyFactions(game, ok) {
+    var st = game.state;
+    var defs = game.level.objectives.stages.reduce(function (a, s) { return a.concat(s.tasks); }, []).concat(game.level.objectives.side);
+    for (var i = 0; i < defs.length; i++) {
+      var t = st.objectives.tasks[defs[i].id];
+      if (!t || t.status !== 'active') continue;
+      var ids = factionSkills(game, defs[i].complete).filter(function (id) { return game.items[id].handler === 'custom_ai'; });
+      for (var j = 0; j < ids.length; j++) {
+        if (st.itemUsesTurn[ids[j]] || !ok(game, ids[j])) continue;
+        var r = await useSkill(game, ids[j]);
+        if (r) return r;
+      }
+    }
+    return null;
+  }
+
   async function chaseTasks(game, ok) {
     var st = game.state;
     var defs = game.level.objectives.stages.reduce(function (a, s) { return a.concat(s.tasks); }, []).concat(game.level.objectives.side);
     for (var i = 0; i < defs.length; i++) {
       var t = st.objectives.tasks[defs[i].id];
       if (!t || t.status !== 'active') continue;
-      var ids = WW.Schema.condSkills(defs[i].complete);
+      var ids = WW.Schema.condSkills(defs[i].complete).concat(factionSkills(game, defs[i].complete));
       for (var j = 0; j < ids.length; j++) {
         if (st.itemUsesTurn[ids[j]] || !game.items[ids[j]] || !ok(game, ids[j])) continue;
         var r = await useSkill(game, ids[j]);
@@ -405,6 +456,7 @@
         (has('iron') && rumorPost && (await tryAct(game, 'iron_fist', { postId: rumorPost.id }))) ||
           (await tryAct(game, 'monitor')) ||
           (probe && (probed = !!(await tryAct(game, 'investigate', { factId: v.unknown[0].id })))) ||
+          (await rallyFactions(game, ok)) ||
           (has('tasks') && (await chaseTasks(game, ok))) ||
           (has('explore') && (await exploreSkills(game, start, ok))) ||
           (g.stance === 'blame' && !st.itemUses.scapegoat && (await tryAct(game, 'scapegoat'))) ||

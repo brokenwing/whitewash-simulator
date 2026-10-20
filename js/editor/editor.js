@@ -100,7 +100,10 @@
         try { ctx.norm = WW.Schema.normalize(E.level); } catch (e) { /* keep last */ }
         changed();
       },
-      rerender: function () { var top = E.els.form.scrollTop; renderForm(); E.els.form.scrollTop = top; }
+      rerender: function () { var top = E.els.form.scrollTop; renderForm(); E.els.form.scrollTop = top; },
+      /* validation messages, shown on the list item they point into (Forms.listField) */
+      issues: function () { return E.validation.errors.map(function (x) { return Object.assign({ kind: 'err' }, x); }).concat(E.validation.warnings.map(function (x) { return Object.assign({ kind: 'warn' }, x); })); },
+      fix: function (fix, path) { applyFix(fix, path); }
     };
     var aiFill = WW.EditorAI.fillFor(s.id);
     WW.DOM.replace(E.els.form,
@@ -141,7 +144,20 @@
 
   function msg(e, kind) {
     return h('div', { class: 'vmsg ' + kind, on: { click: function () { E.section = sectionOfPath(e.path); renderNav(); renderForm(); } } },
-      h('div', null, (kind === 'err' ? '❌ ' : '⚠ ') + e.msg), h('div', { class: 'p' }, e.path));
+      h('div', null, (kind === 'err' ? '❌ ' : '⚠ ') + e.msg), h('div', { class: 'p' }, e.path),
+      e.fixes ? h('div', { class: 'vmsg-fixes' }, e.fixes.map(function (fix) {
+        return h('button', { class: 'btn small', type: 'button', title: fix.desc, on: { click: function (ev) { ev.stopPropagation(); applyFix(fix, e.path); } } }, '🔧 ' + fix.label);
+      })) : null);
+  }
+
+  /* a warning's fix (WW.Feasibility): a data patch on the level as written, then show where it landed */
+  function applyFix(fix, path) {
+    var changed = WW.Feasibility.applyFix(E.level, fix);
+    E.validation = WW.Schema.validate(E.level);
+    saveDraft();
+    E.section = sectionOfPath(changed[0] || path);
+    renderAll();
+    WW.DOM.toast('已修改：' + changed.join('、') + '。可以再跑一次「🧪 通关测试」看效果', 'good');
   }
 
   function renderAll() {
@@ -255,6 +271,9 @@
       E.section = sectionOfPath(path);
       renderNav();
       renderForm();
+    }, function (fix) {
+      applyFix(fix, '');
+      return U.deepClone(E.level);
     });
   }
 

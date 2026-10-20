@@ -147,7 +147,11 @@
         {
           key: 'factions', label: '阵营', type: 'list', full: true, defaultsFrom: function () { return U.deepClone(D.defaultFactions); },
           itemTitle: function (it) { return (it.name || '阵营') + ' · 占比 ' + Math.round((it.size || 0) * 100) + '%'; },
-          newItem: function (lv) { return { id: nextId(lv.factions, 'faction'), name: '新阵营', size: 0.1, sentiment: 0, volatility: 0.3, bias: 0, desc: '', sens: {} }; },
+          /* starts as a 路人 copy: a faction with no sensitivities answers everything like every other one */
+          newItem: function (lv) {
+            var base = (D.defaultFactions || []).filter(function (x) { return x.id === 'passerby'; })[0] || {};
+            return { id: nextId(lv.factions, 'faction'), name: '新阵营', size: 0.1, sentiment: 0, volatility: base.volatility || 0.3, bias: 0, desc: '', sens: U.deepClone(base.sens || {}) };
+          },
           fields: [
             { key: 'id', label: 'ID', type: 'text' },
             { key: 'name', label: '名称', type: 'text' },
@@ -156,6 +160,7 @@
             { key: 'bias', label: '长期倾向（偏置）', type: 'number' },
             { key: 'volatility', label: '波动性（0-1）', type: 'number', step: 0.05 },
             { key: 'desc', label: '描述', type: 'text', full: true },
+            { key: 'template', label: '套用性格模板（复制默认阵营的敏感系数和波动性）', type: 'factionTemplate', full: true },
             { key: 'sens', label: '对各类手段的敏感系数', type: 'sens', full: true }
           ]
         }

@@ -544,7 +544,13 @@
     }
     var E = function (path, msg) { errors.push({ path: path, msg: msg }); };
     /* blocking: the level loads but part of it can never work (AI generation sends these back for a fix) */
-    var W = function (path, msg, blocking) { warnings.push(blocking ? { path: path, msg: msg, blocking: true } : { path: path, msg: msg }); };
+    /* fixes: optional data patches the editor offers as buttons (see WW.Feasibility) */
+    var W = function (path, msg, blocking, fixes) {
+      var w = { path: path, msg: msg };
+      if (blocking) w.blocking = true;
+      if (fixes && fixes.length) w.fixes = fixes;
+      warnings.push(w);
+    };
 
     structureWarnings(level, W);
     if (!level || !level.meta || !level.meta.title) W('meta.title', '建议填写关卡标题');
@@ -665,6 +671,9 @@
     if (!lv.facts.length) W('facts', '没有设置事实与真相，谎言债、打脸、铁拳判定都不会生效');
 
     reachability(lv, W);
+    if (!errors.length && WW.Feasibility) {
+      try { WW.Feasibility.check(lv, W, level); } catch (e) { WW.Log.info('engine', '任务可完成性检查跳过：' + e.message); }
+    }
 
     /* semantic check on a fresh game; needs the engine (editor, game, tests) and a sound level */
     if (!errors.length && WW.Engine && WW.Objectives && WW.Objectives.lintStart) {

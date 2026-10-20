@@ -37,7 +37,10 @@
       Object.keys(WW.Schema.ENGINE_FLAG_LABELS).map(function (k) { return k + ' ' + WW.Schema.ENGINE_FLAG_LABELS[k]; }).join('、') + '）；itemUses.<技能> 和 unlock 的技能都必须在 items.enabled 里。',
     '阶段奖励用 {"type":"unlock","tier":2}（或 3）逐步解锁技能层级，再配 {"type":"budget","delta":15} 追加预算。',
     '技能层级：' + [1, 2, 3].map(function (n) { return n + ' 级 ' + Object.keys(WW.Data.items).filter(function (k) { return (WW.Data.items[k].tier || 1) === n; }).join(' '); }).join('；') + '。',
-    '必做子任务要用到的技能（itemUses.<技能>，flags.rectified 需要 rectify）必须在这一阶段开始前就已解锁：开局层级 items.startTier，或前面阶段奖励里的 unlock。本阶段的奖励要等本阶段完成才发放。'
+    '必做子任务要用到的技能（itemUses.<技能>，flags.rectified 需要 rectify）必须在这一阶段开始前就已解锁：开局层级 items.startTier，或前面阶段奖励里的 unlock。本阶段的奖励要等本阶段完成才发放。',
+    '以 faction.<阵营> 好感为目标时，玩家得有办法单独拉动这个阵营：它在某个已启用技能的渠道上 sens ≥ 1.3 且明显高于其他阵营，或者有自定义技能 / 事件效果 {"type":"faction","faction":"<阵营>"} 专门作用于它。开局舆论压力会把所有阵营往下拉，目标别定得比开局值高太多。',
+    '以 opp.<对手>.morale / strength 压低为目标时，要启用能打击它的技能：反向扒皮 expose（配舆情监测 monitor，且对手有 dirt 把柄或会用 counter_shill / rumor）、律师函 legal，或对手会造谣（rumor）时用铁拳 iron_fist。',
+    '描述里写“合同结束时 / 全程 / 整局”的目标要加 at:"end"；可选子任务和带期限的支线要用的技能，也必须在它能被完成之前解锁（可选子任务在本阶段完成时就会过期）。'
   ].join('\n');
 
   /* keys: what the section writes; ctx: what it may reference from earlier sections */
@@ -45,7 +48,9 @@
     { id: 'core', label: '骨架：委托方、事件、事实、阵营', effort: 'medium', maxTokens: 12000,
       keys: ['id', 'meta', 'client', 'incident', 'facts', 'contract', 'initialStats', 'factions', 'platforms'], ctx: [],
       ask: function (o) {
-        return '写这一关的骨架。要求：contract.turns=' + o.turns + '，contract.budget=' + o.budget + '；3~5 条事实（真假混合，至少一条是谣言 isTrue:false、一条是可被铁拳的违规把柄 regulatory:true，每条写清客户口径 clientClaim 和 keywords）；4~6 个阵营（factions，size 合计约 1）。';
+        return '写这一关的骨架。要求：contract.turns=' + o.turns + '，contract.budget=' + o.budget + '；3~5 条事实（真假混合，至少一条是谣言 isTrue:false、一条是可被铁拳的违规把柄 regulatory:true，每条写清客户口径 clientClaim 和 keywords）；4~6 个阵营（factions，size 合计约 1）。' +
+          '每个阵营都要写 sens（对各类手段的敏感系数，渠道：' + WW.Data.channelOrder.filter(function (c) { return c !== 'event'; }).join(' ') + '；1 为普通，2 为加倍，负数为反感），' +
+          '按人设至少有两个渠道明显偏离 1，各阵营之间要有区别：没写 sens 的阵营对所有手段一律为 1，玩家没法单独拉动它。';
       } },
     { id: 'people', label: '网民画像与初始帖子', effort: 'medium', maxTokens: 12000,
       keys: ['personas', 'seedPosts', 'ai'], ctx: ['incident', 'facts', 'factions', 'platforms'],

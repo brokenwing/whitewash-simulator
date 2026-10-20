@@ -313,16 +313,36 @@
     return h('div', null, ta, err);
   }
 
-  function sensEditor(get, set) {
+  /* faction: the list item being edited. An empty box falls back to the default faction of the same
+     id, or to 1 for every channel, the same as every other custom faction (shown as 1（未区分）). */
+  function sensEditor(get, set, faction) {
     var sens = get() || {};
-    return h('div', { class: 'sens-grid' }, D.channelOrder.map(function (c) {
-      var inp = h('input', { class: 'input', type: 'number', step: 0.1, value: sens[c] === undefined ? '' : sens[c], placeholder: '默认' });
+    var base = faction && (D.defaultFactions || []).filter(function (x) { return x.id === faction.id; })[0];
+    var custom = Object.keys(sens).length > 0;
+    var grid = h('div', { class: 'sens-grid' }, D.channelOrder.map(function (c) {
+      var fallback = base && base.sens && base.sens[c] !== undefined ? String(base.sens[c]) : '1（未区分）';
+      var inp = h('input', { class: 'input', type: 'number', step: 0.1, value: sens[c] === undefined ? '' : sens[c], placeholder: fallback });
       inp.addEventListener('change', function () {
         var cur = get() || {};
         if (inp.value === '') delete cur[c]; else cur[c] = Number(inp.value);
         set(cur);
       });
       return h('label', null, D.channels[c].name, inp);
+    }));
+    if (custom || base) return grid;
+    return h('div', null, grid, h('div', { class: 'tiny muted', style: { marginTop: '4px' } },
+      '⚠ 还没有区分：这个阵营对所有手段的反应都是 1，和其他没调过的阵营一模一样，玩家没法单独拉动它。可以在上面套用一个性格模板。'));
+  }
+
+  /* buttons that copy a default faction's sensitivities and volatility into the edited faction */
+  function factionTemplates(faction, ctx) {
+    return h('div', { class: 'row', style: { flexWrap: 'wrap', gap: '6px' } }, (D.defaultFactions || []).map(function (base) {
+      return h('button', { class: 'btn small', type: 'button', title: '复制「' + base.name + '」的敏感系数和波动性（' + (base.desc || '') + '）', on: { click: function () {
+        faction.sens = U.deepClone(base.sens);
+        faction.volatility = base.volatility;
+        ctx.onChange();
+        ctx.rerender();
+      } } }, base.name);
     }));
   }
 
@@ -436,7 +456,8 @@
         return wrap(f, ln);
       }
       case 'json': return wrap(f, jsonEditor(get, set, f.rows));
-      case 'sens': return wrap(f, sensEditor(get, function (val) { set(val); }));
+      case 'sens': return wrap(f, sensEditor(get, function (val) { set(val); }, obj));
+      case 'factionTemplate': return wrap(f, factionTemplates(obj, ctx));
       case 'cond': return wrap(f, condEditor(get, set, ctx));
       case 'effects': return wrap(f, effectsEditor(get, set, ctx));
       case 'condMap': return wrap(f, condMapEditor(get, set, f.options, ctx));
@@ -456,12 +477,19 @@
           if (!present) return group;
         }
         if (!present) U.set(obj, f.key, {});
-        group.appendChild(render(f.fields, { obj: U.get(obj, f.key), root: ctx.root, norm: ctx.norm, onChange: ctx.onChange, rerender: ctx.rerender, collapsed: ctx.collapsed }));
+        group.appendChild(render(f.fields, { obj: U.get(obj, f.key), root: ctx.root, norm: ctx.norm, onChange: ctx.onChange, rerender: ctx.rerender, collapsed: ctx.collapsed, issues: ctx.issues, fix: ctx.fix, pathPrefix: (ctx.pathPrefix || '') + f.key + '.' }));
         return group;
       }
       case 'list': return listField(f, ctx);
       default: return null;
     }
+  }
+
+  /* validation messages whose path points into the list item at dotted key `key` ("objectives.stages.0") */
+  function issuesUnder(ctx, key) {
+    if (!ctx.issues) return [];
+    return ctx.issues().map(function (x) { return Object.assign({ dot: String(x.path || '').replace(/\[(\d+)\]/g, '.$1') }, x); })
+      .filter(function (x) { return x.dot === key || x.dot.indexOf(key + '.') === 0; });
   }
 
   function listField(f, ctx) {
@@ -486,6 +514,8 @@
       var collapsed = ctx.collapsed[cKey] !== false;
       var body = h('div', { class: 'f-item-b' });
       var titleEl = h('span', { class: 't' }, f.itemTitle ? f.itemTitle(item, i) : '#' + (i + 1));
+      var mine = issuesUnder(ctx, cKey);
+      var badge = mine.length ? h('span', { class: 'f-item-issues' + (mine.some(function (x) { return x.kind === 'err'; }) ? ' err' : ''), title: mine.map(function (x) { return x.msg; }).join('\n') }, '⚠ ' + mine.length) : null;
       var card = h('div', { class: 'f-item' + (collapsed ? ' collapsed' : '') },
         h('div', { class: 'f-item-h', on: { click: function (e) {
           if (e.target.closest('button')) return;
@@ -493,15 +523,22 @@
           card.classList.toggle('collapsed');
           if (!card.classList.contains('collapsed') && !body.firstChild) fill();
         } } },
-          h('span', { class: 'muted small' }, '#' + (i + 1)), titleEl,
+          h('span', { class: 'muted small' }, '#' + (i + 1)), titleEl, badge,
           h('button', { class: 'icon-btn', title: '上移', type: 'button', disabled: i === 0, on: { click: function () { list.splice(i - 1, 0, list.splice(i, 1)[0]); ctx.onChange(); ctx.rerender(); } } }, '↑'),
           h('button', { class: 'icon-btn', title: '下移', type: 'button', disabled: i === list.length - 1, on: { click: function () { list.splice(i + 1, 0, list.splice(i, 1)[0]); ctx.onChange(); ctx.rerender(); } } }, '↓'),
           h('button', { class: 'icon-btn', title: '复制', type: 'button', on: { click: function () { var copy = U.deepClone(item); if (copy.id) copy.id = copy.id + '_copy'; list.splice(i + 1, 0, copy); ctx.onChange(); ctx.rerender(); } } }, '⧉'),
           h('button', { class: 'icon-btn', title: '删除', type: 'button', on: { click: function () { list.splice(i, 1); ctx.onChange(); ctx.rerender(); } } }, '🗑')),
         body);
       var fill = function () {
-        WW.DOM.replace(body, render(f.fields, {
-          obj: item, root: ctx.root, norm: ctx.norm, collapsed: ctx.collapsed, pathPrefix: cKey + '.', rerender: ctx.rerender,
+        /* the item's own messages (not its sub-items': those show on their own cards) */
+        var own = mine.filter(function (x) { return !/\.\d+(\.|$)/.test(x.dot.slice(cKey.length)); });
+        WW.DOM.replace(body, own.length ? h('div', { class: 'f-item-msgs' }, own.map(function (x) {
+          return h('div', { class: 'vmsg ' + x.kind }, h('div', null, (x.kind === 'err' ? '❌ ' : '⚠ ') + x.msg),
+            x.fixes && ctx.fix ? h('div', { class: 'vmsg-fixes' }, x.fixes.map(function (fx) {
+              return h('button', { class: 'btn small', type: 'button', title: fx.desc, on: { click: function () { ctx.fix(fx, x.path); } } }, '🔧 ' + fx.label);
+            })) : null);
+        })) : null, render(f.fields, {
+          obj: item, root: ctx.root, norm: ctx.norm, collapsed: ctx.collapsed, pathPrefix: cKey + '.', rerender: ctx.rerender, issues: ctx.issues, fix: ctx.fix,
           onChange: function () { titleEl.textContent = f.itemTitle ? f.itemTitle(item, i) : '#' + (i + 1); ctx.onChange(); }
         }));
       };

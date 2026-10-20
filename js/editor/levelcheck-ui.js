@@ -28,7 +28,8 @@
   }
 
   /* level: current raw level; jump(path): close and show that editor section */
-  function open(level, jump) {
+  /* fixLevel(fix): applies a verdict's fix in the editor and returns the level as it is now */
+  function open(level, jump, fixLevel) {
     var lv = WW.Schema.normalize(level);
     var allowed = DIFFS.filter(function (d) { return lv.difficulty.allowed.indexOf(d) >= 0; });
     var checks = {};
@@ -58,8 +59,13 @@
       footer: [h('button', { class: 'btn', on: { click: function () { stopping = true; m.close(); } } }, '关闭'), stop, go]
     });
 
+    var applyFix = fixLevel ? function (fix) {
+      level = fixLevel(fix);
+      show(last.res, C.analyze(last.level, last.res, intent.value), true);
+      status.textContent = '已修改：' + fix.label + '。点「重新测试」看效果。';
+    } : null;
     var show = function (res, report, stale) {
-      WW.DOM.replace(out, render(level, res, report, stale, function (path) { m.close(); jump(path); }));
+      WW.DOM.replace(out, render(level, res, report, stale, function (path) { m.close(); jump(path); }, applyFix));
     };
     var hash = hashOf(level);
     if (last) {
@@ -103,14 +109,17 @@
 
   /* ------------------------------------------------------------------ result view */
 
-  function render(level, res, a, stale, jump) {
+  function render(level, res, a, stale, jump, applyFix) {
     var main = a.main;
     return [
       stale ? h('div', { class: 'vmsg warn' }, '⚠ 关卡在测试之后改过，下面的结果可能已经不准。') : null,
       h('div', { class: 'section-title' }, '结论'),
       h('div', { class: 'check-cards' }, a.verdicts.map(function (v) {
         return h('div', { class: 'check-card ' + v.level + (v.path ? ' link' : ''), title: v.path ? '点击跳到：' + v.path : '', on: { click: function () { if (v.path) jump(v.path); } } },
-          h('div', { class: 't' }, ICON[v.level] + ' ' + v.title), v.detail ? h('div', { class: 'd' }, v.detail) : null);
+          h('div', { class: 't' }, ICON[v.level] + ' ' + v.title), v.detail ? h('div', { class: 'd' }, v.detail) : null,
+          v.fixes && applyFix && !stale ? h('div', { class: 'vmsg-fixes' }, v.fixes.map(function (fix) {
+            return h('button', { class: 'btn small', type: 'button', title: fix.desc, on: { click: function (ev) { ev.stopPropagation(); applyFix(fix); } } }, '🔧 ' + fix.label);
+          })) : null);
       })),
       coverageLine(level, a.coverage),
       h('div', { class: 'section-title' }, '各难度概览'),
@@ -125,7 +134,7 @@
       ranking(level, res, main),
       h('div', { class: 'section-title' }, '任务完成情况（完成 / 出现 / 总局数）'),
       h('table', { class: 'data-table' },
-        h('thead', null, h('tr', null, [h('th', null, '任务')].concat(res.diffs.map(function (d) { return h('th', null, dname(d)); })))),
+        h('thead', null, h('tr', null, [h('th', null, '任务')].concat(res.diffs.map(function (d) { return h('th', null, dname(d)); }), [h('th', null, '没完成时最好达到（' + dname(main) + '）')]))),
         h('tbody', null, a.tasks.map(function (t) {
           return h('tr', { class: 'link', on: { click: function () { jump(t.path); } } },
             h('td', null, (t.side ? '支线 · ' : t.required ? '必做 · ' : '可选 · ') + (t.stageTitle ? t.stageTitle + ' · ' : '') + t.title),
@@ -133,9 +142,17 @@
               var x = t.byDiff[d];
               var bad = x.reached && !x.done;
               return h('td', { class: bad ? 'bad' : '' }, x.games ? x.done + ' / ' + x.reached + ' / ' + x.games : '—');
-            }));
+            }), h('td', { class: 'small' }, nearestText(t, level)));
         })))
     ];
+  }
+
+  /* how close the comparisons of a never-finished task came: "好感 14 / ≥ 35" */
+  function nearestText(t, level) {
+    var lv = WW.Schema.normalize(level);
+    var short = (t.nearest || []).filter(function (n) { return n.best !== undefined && (n.up ? n.best < n.value || (n.op === '>' && n.best === n.value) : n.best > n.value || (n.op === '<' && n.best === n.value)); });
+    if (!short.length) return '';
+    return short.map(function (n) { return WW.Cond.describe({ var: n.var, op: n.op, value: n.value }, lv) + '：最好 ' + n.best; }).join('；');
   }
 
   /* which enabled skills the sweep's games used on the main difficulty */

@@ -217,6 +217,119 @@ async function unitTests() {
     }
   });
 
+  /* ---- task feasibility (js/engine/feasibility.js) ---- */
+  const feas = (patch) => {
+    const lv = WW.Schema.blank();
+    lv.objectives = { stages: [{ id: 's1', title: '一', tasks: [{ id: 'base', title: '撑到最后', complete: { var: 'turnsLeft', op: '<=', value: 0 } }] }], side: [] };
+    patch(lv);
+    return { lv, w: WW.Schema.validate(lv).warnings };
+  };
+  const hits = (w, re) => w.filter((x) => re.test(x.msg));
+
+  await test('Feasibility A: values out of range, facts against the truth, absent opponents, required tasks that "fail"', () => {
+    const { w } = feas((lv) => {
+      lv.facts.push({ id: 'f2', text: '谣言一条', isTrue: false, keywords: ['谣言'] });
+      lv.opponents = [{ id: 'ghost', name: '幽灵号', startActive: false, abilities: [{ use: 'rumor' }] }];
+      lv.objectives.side = [
+        { id: 'a1', title: '热度破表', offer: 'start', complete: { var: 'stats.heat', op: '>=', value: 120 } },
+        { id: 'a2', title: '证伪真事', offer: 'start', complete: { var: 'fact.f1.refuted', op: '==', value: true } },
+        { id: 'a3', title: '曝光谣言', offer: 'start', complete: { var: 'fact.f2.revealed', op: '==', value: true } },
+        { id: 'a4', title: '等幽灵', offer: 'start', complete: { var: 'opp.ghost.active', op: '==', value: true } },
+        { id: 'a5', title: '主线失败', offer: 'start', complete: { var: 'task.base.failed', op: '==', value: true } },
+        { id: 'ok', title: '二选一', offer: 'start', complete: { any: [{ var: 'stats.heat', op: '>=', value: 120 }, { var: 'stats.heat', op: '<=', value: 30 }] } }
+      ];
+    });
+    ['热度破表', '证伪真事', '曝光谣言', '等幽灵', '主线失败'].forEach((t) => assert(hits(w, new RegExp(t + '.*完不成')).some((x) => x.blocking), t + ' ' + JSON.stringify(w.map((x) => x.msg))));
+    assert(!hits(w, /二选一/).length, 'an any() with one possible branch is fine');
+  });
+
+  await test('Feasibility B: use caps, deadline vs offer vs at:end, text says "at the end", skills unlocked too late', () => {
+    const { w } = feas((lv) => {
+      lv.items.enabled.push('investigate');
+      lv.objectives.stages[0].tasks.push({ id: 'opt', title: '本阶段查一次', required: false, complete: { var: 'itemUses.investigate', op: '>=', value: 1 } });
+      lv.objectives.stages[0].rewards = [{ type: 'unlock', tier: 3 }];
+      lv.objectives.stages.push({ id: 's2', title: '二', tasks: [{ id: 'b2', title: '撑住', complete: { var: 'turn', op: '>=', value: 3 } }] });
+      lv.objectives.side = [
+        { id: 'b1', title: '铁拳三连', offer: 'start', complete: { var: 'itemUses.iron_fist', op: '>=', value: 3 } },
+        { id: 'b3', title: '来不及', offer: { var: 'turn', op: '>=', value: 5 }, deadline: 3, complete: { var: 'stats.heat', op: '<=', value: 50 } },
+        { id: 'b4', title: '结算又限期', offer: 'start', at: 'end', deadline: 3, complete: { var: 'stats.heat', op: '<=', value: 50 }, fail: { var: 'stats.heat', op: '>', value: 90 } },
+        { id: 'b5', title: '口碑', desc: '合同结束时好感不低于 0', offer: 'start', complete: { var: 'stats.sentiment', op: '>=', value: 0 } },
+        { id: 'b6', title: '口碑前', desc: '合同结束前好感不低于 0', offer: 'start', complete: { var: 'stats.sentiment', op: '>=', value: 0 } },
+        { id: 'b7', title: '早查', offer: 'start', deadline: 2, complete: { var: 'itemUses.investigate', op: '>=', value: 1 } }
+      ];
+    });
+    assert(hits(w, /铁拳三连.*最多用 2 次/).some((x) => x.blocking), 'maxUses');
+    assert(hits(w, /来不及.*发放时就已经过期/).some((x) => x.blocking), 'offer after deadline');
+    assert(hits(w, /结算又限期.*永远等不到结算/).some((x) => x.blocking), 'at:end + deadline');
+    assert(hits(w, /口碑」的描述.*at:"end"/).length === 1 && !hits(w, /口碑前/).length, 'end words, but not 合同结束前');
+    assert(hits(w, /本阶段查一次.*过期/).some((x) => x.blocking), 'optional task needs a skill its own stage unlocks');
+    assert(hits(w, /早查.*前 1 个阶段完成才解锁/).length === 1, 'side task with a deadline before the unlock: ' + JSON.stringify(w.map((x) => x.msg)));
+  });
+
+  await test('Feasibility B5: required skills that cost more than the whole budget', () => {
+    const { w } = feas((lv) => {
+      lv.contract.budget = 10;
+      lv.items.custom = [{ id: 'gala', name: '天价发布会', tier: 1, cost: 50 }];
+      lv.objectives.stages[0].tasks.push({ id: 'show', title: '开发布会', required: true, complete: { var: 'itemUses.gala', op: '>=', value: 1 } });
+    });
+    assert(hits(w, /天价发布会.*最低也要 50 万.*预算 10 万/).length === 1, JSON.stringify(w.map((x) => x.msg)));
+  });
+
+  await test('Feasibility A4: a required task that forces a side task to fail', () => {
+    const { w } = feas((lv) => {
+      lv.objectives.stages[0].tasks.push({ id: 'buy', title: '买水军', required: true, complete: { var: 'itemUses.shill', op: '>=', value: 2 } });
+      lv.objectives.side = [{ id: 'clean', title: '零水军', offer: 'start', at: 'end', complete: { var: 'itemUses.shill', op: '==', value: 0 }, fail: { var: 'itemUses.shill', op: '>', value: 0 } }];
+    });
+    assert(hits(w, /零水军.*买水军.*必然/).length === 1, JSON.stringify(w.map((x) => x.msg)));
+  });
+
+  await test('Feasibility C: no lever on a faction / an opponent, and the fixes remove the warning', () => {
+    const make = (lv) => {
+      lv.factions = [{ id: 'crowd', name: '路过群众', size: 0.6, sentiment: -10 }, { id: 'zeal', name: '热血青年', desc: '跟风转发', size: 0.4, sentiment: 10 }];
+      lv.opponents = [{ id: 'nerds', name: '科普联盟', morale: 70, abilities: [{ use: 'archive' }] }];
+      lv.objectives.stages[0].tasks.push({ id: 'rally', title: '唤醒青年', required: true, complete: { var: 'faction.zeal', op: '>=', value: 40 } });
+      lv.objectives.stages[0].tasks.push({ id: 'crush', title: '打压联盟', required: true, complete: { var: 'opp.nerds.morale', op: '<=', value: 40 } });
+    };
+    const { lv, w } = feas(make);
+    const c1 = hits(w, /唤醒青年.*没有能单独影响它的手段/)[0], c2 = hits(w, /打压联盟.*没有打击它的手段/)[0];
+    assert(c1 && c1.fixes.length === 3 && c2 && c2.fixes.length === 2, JSON.stringify(w.map((x) => [x.msg, x.fixes && x.fixes.length])));
+    c1.fixes.forEach((fix) => {
+      const copy = JSON.parse(JSON.stringify(lv));
+      WW.Feasibility.applyFix(copy, fix);
+      assert(!hits(WW.Schema.validate(copy).warnings, /唤醒青年.*没有能单独影响/).length || /性格/.test(fix.label), 'fix "' + fix.label + '" removes the warning');
+    });
+    c2.fixes.forEach((fix) => {
+      const copy = JSON.parse(JSON.stringify(lv));
+      WW.Feasibility.applyFix(copy, fix);
+      const left = WW.Schema.validate(copy);
+      eq(left.errors.length, 0, fix.label);
+      assert(!hits(left.warnings, /打压联盟.*没有打击它的手段/).length, 'fix "' + fix.label + '" removes the warning');
+    });
+    /* the built-in levels, written with the default factions, have their levers */
+    for (const id of ['tutorial_crayfish', 'milktea', 'idol', 'autobrake']) {
+      assert(!hits(WW.Schema.validate(WW.Levels.get(id)).warnings, /没有能单独影响|没有打击它的手段/).length, id);
+    }
+  });
+
+  await test('LevelCheck: a never-finished task says how close it came, and only moving targets get a threshold fix', async () => {
+    const { lv } = feas((l) => {
+      l.factions = [{ id: 'crowd', name: '路过群众', size: 0.6, sentiment: -10 }, { id: 'zeal', name: '热血青年', size: 0.4, sentiment: 10 }];
+      l.opponents = [{ id: 'nerds', name: '科普联盟', morale: 70, abilities: [{ use: 'archive' }] }];
+      l.objectives.stages[0].tasks.push({ id: 'rally', title: '唤醒青年', required: true, complete: { var: 'faction.zeal', op: '>=', value: 90 } });
+      /* nothing deletes posts here (no 删帖 / 限流): the count never moves */
+      l.items = { enabled: ['statement', 'kol', 'monitor'] };
+      l.objectives.side = [{ id: 'crush', title: '打压联盟', offer: 'start', complete: { var: 'posts.deleted', op: '>=', value: 5 } }];
+    });
+    const res = await WW.LevelCheck.run(lv, { depth: 'quick', diffs: ['regular'] });
+    const a = WW.LevelCheck.analyze(lv, res, 'any');
+    const rally = a.verdicts.find((v) => /唤醒青年/.test(v.title)), crush = a.verdicts.find((v) => /打压联盟/.test(v.title));
+    assert(rally && /最好只到 -?[\d.]+（差/.test(rally.detail) && rally.fixes && rally.fixes.length === 1, JSON.stringify(rally));
+    const to = rally.fixes[0].patch[0].value, n = a.tasks.find((t) => t.id === 'rally').nearest[0];
+    assert(to > n.from && to <= n.best, 'the new threshold still asks for progress: ' + JSON.stringify([to, n]));
+    eq(rally.fixes[0].patch[0].path, 'objectives.stages[0].tasks[1].complete.value');
+    assert(crush && /没往目标方向动过/.test(crush.detail) && !crush.fixes, JSON.stringify(crush));
+  });
+
   await test('Schema.condSkills: item counts and engine flags map to skills', () => {
     const c = { all: [{ var: 'itemUses.shill', op: '>=', value: 1 }, { any: [{ var: 'flags.rectified', op: '==', value: true }, { var: 'flags.custom', op: '==', value: true }] }] };
     eq(JSON.stringify(WW.Schema.condSkills(c)), '["shill","rectify"]');
