@@ -266,7 +266,7 @@
     lv.items.custom = arr(lv.items.custom).map(function (c, i) {
       var eff = U.isObj(c.effect) ? c.effect : {};
       return {
-        id: str(c.id, 'custom' + (i + 1)), name: str(c.name, '自定义道具'), icon: str(c.icon, '✨'),
+        id: str(c.id, 'custom' + (i + 1)), name: str(c.name, '自定义技能'), icon: str(c.icon, '✨'),
         tier: U.clamp(Math.round(num(c.tier, 1)), 1, 3), ap: Math.max(0, Math.round(num(c.ap, 1))), cost: Math.max(0, num(c.cost, 5)),
         handler: 'custom_ai', channel: D.channels[c.channel] ? c.channel : 'statement', target: 'none',
         cooldown: Math.max(0, num(c.cooldown, 0)), maxUses: c.maxUses ? num(c.maxUses, 0) : 0,
@@ -402,7 +402,7 @@
     dupCheck(lv.factions, 'factions', '阵营');
     dupCheck(lv.opponents, 'opponents', '对手');
     dupCheck(lv.events, 'events', '事件');
-    dupCheck(lv.items.custom, 'items.custom', '自定义道具');
+    dupCheck(lv.items.custom, 'items.custom', '自定义技能');
     var allTasks = [];
     lv.objectives.stages.forEach(function (s) { allTasks = allTasks.concat(s.tasks); });
     allTasks = allTasks.concat(lv.objectives.side);
@@ -425,14 +425,14 @@
 
     var itemIds = Object.keys(D.items).concat(lv.items.custom.map(function (c) { return c.id; }));
     lv.items.enabled.forEach(function (id, i) {
-      if (!D.items[id]) E('items.enabled[' + i + ']', '道具库中没有：' + id);
+      if (!D.items[id]) E('items.enabled[' + i + ']', '技能库中没有：' + id);
     });
     Object.keys(lv.items.unlocks).forEach(function (id) {
-      if (itemIds.indexOf(id) < 0) E('items.unlocks.' + id, '道具不存在：' + id);
+      if (itemIds.indexOf(id) < 0) E('items.unlocks.' + id, '技能不存在：' + id);
       WW.Cond.validate(lv.items.unlocks[id], lv, 'items.unlocks.' + id, errors);
     });
     Object.keys(lv.items.overrides).forEach(function (id) {
-      if (!D.items[id]) W('items.overrides.' + id, '覆盖了不存在的道具：' + id);
+      if (!D.items[id]) W('items.overrides.' + id, '覆盖了不存在的技能：' + id);
     });
 
     lv.objectives.stages.forEach(function (s, i) {
@@ -493,7 +493,7 @@
       ['when', 'done', 'skip'].forEach(function (k) { WW.Cond.validate(g[k], lv, p + '.' + k, errors); });
       g.notes.forEach(function (n, j) { WW.Cond.validate(n.when, lv, p + '.notes[' + j + '].when', errors); });
       if (g.action && g.action.item && !lv.items.enabled.concat(lv.items.custom.map(function (c) { return c.id; })).some(function (id) { return id === g.action.item; })) {
-        W(p + '.action.item', '教程步骤引用的道具「' + g.action.item + '」本关没有启用');
+        W(p + '.action.item', '教程步骤引用的技能「' + g.action.item + '」本关没有启用');
       }
     });
 

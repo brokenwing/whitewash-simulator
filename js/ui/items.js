@@ -49,7 +49,7 @@
     return h('div', { class: 'col', style: { gap: '4px' } },
       h('div', { class: 'small sub' }, item.desc || ''),
       item.risk ? h('div', { class: 'small', style: { color: 'var(--crit-ink)' } }, '风险：' + item.risk) : null,
-      h('div', { class: 'tiny muted' }, (WW.Data.tierNames[item.tier] || '') + '道具 · ' + item.ap + ' 行动点' + (item.cooldown ? ' · 冷却 ' + item.cooldown + ' 回合' : '') + (status.usesLeft !== null ? ' · 剩余 ' + status.usesLeft + ' 次' : '') + (status.voucher ? ' · 有免费券 ×' + status.voucher : '')));
+      h('div', { class: 'tiny muted' }, (WW.Data.tierNames[item.tier] || '') + '技能 · ' + item.ap + ' 行动点' + (item.cooldown ? ' · 冷却 ' + item.cooldown + ' 回合' : '') + (status.usesLeft !== null ? ' · 剩余 ' + status.usesLeft + ' 次' : '') + (status.voucher ? ' · 有免费券 ×' + status.voucher : '')));
   }
 
   function open(ui, id, preset, guide) {

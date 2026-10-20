@@ -305,6 +305,14 @@
 .banner.guide { background: rgba(57, 135, 229, .12); border: 1px solid rgba(57, 135, 229, .35); }
 .banner.offer { background: rgba(250, 178, 25, .12); border: 1px solid rgba(250, 178, 25, .4); }
 
+/* ================================================================ skill result dialog */
+.modal.act-result-modal { width: min(520px, 100%); }
+.act-result { display: flex; flex-direction: column; gap: 12px; padding: 12px 14px; border-radius: 10px; border-left: 4px solid var(--good); background: var(--panel-2); }
+.act-result.bad { border-left-color: var(--crit); }
+.act-result-text { font-size: 17px; line-height: 1.6; white-space: pre-line; }
+.act-result .delta-row { margin: 0; }
+.act-result .delta-chip { font-size: 15px; padding: 6px 12px; }
+
 /* ================================================================ tutorial coach */
 .coach {
   position: fixed; left: 16px; bottom: 16px; z-index: 900; width: min(360px, calc(100vw - 32px)); max-height: 56vh; overflow-y: auto;

@@ -43,8 +43,8 @@
     { key: 'fact.{id}.fixed', label: '问题已整改', param: 'fact' },
     { key: 'task.{id}.done', label: '子任务已完成', param: 'task' },
     { key: 'task.{id}.failed', label: '子任务已失败', param: 'task' },
-    { key: 'itemUses.', label: '道具累计使用次数', param: 'item' },
-    { key: 'itemUsesTurn.', label: '道具本回合使用次数', param: 'item' },
+    { key: 'itemUses.', label: '技能累计使用次数', param: 'item' },
+    { key: 'itemUsesTurn.', label: '技能本回合使用次数', param: 'item' },
     { key: 'flags.', label: '剧情标记', param: 'flag' },
     { key: 'counters.', label: '计数器（violations 红线违规、exposeSuccess 扒皮成功、faceSlaps 被打脸、regulated 被约谈……）', param: 'counter' }
   ];

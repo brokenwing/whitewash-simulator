@@ -342,7 +342,7 @@
         m[v] = { var: 'turn', op: '>=', value: 2 };
         set(m);
         render();
-      }, '+ 为某个道具添加解锁条件')));
+      }, '+ 为某个技能添加解锁条件')));
     };
     render();
     return box;

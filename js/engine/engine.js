@@ -396,7 +396,7 @@
     var status = WW.Items.status(this, id, params);
     if (!status.usable) return Promise.resolve({ ok: false, reason: status.reason });
     var handler = WW.Actions.get(item.handler);
-    if (!handler) return Promise.resolve({ ok: false, reason: '未知道具类型：' + item.handler });
+    if (!handler) return Promise.resolve({ ok: false, reason: '未知技能类型：' + item.handler });
     var err = handler.validate ? handler.validate(this, item, params) : '';
     if (err) return Promise.resolve({ ok: false, reason: err });
     var cost = status.cost;

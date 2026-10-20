@@ -186,10 +186,7 @@
       }
       self.save();
       if (id === 'iron_fist' && r.detail && r.detail.success) self.fistFx();
-      if (!o.silent) {
-        var parts = Object.keys(r.deltas || {}).map(function (k) { return (STAT_LABELS[k] || k) + (r.deltas[k] > 0 ? '+' : '') + U.round(r.deltas[k], 1); });
-        WW.DOM.toast(r.text + (parts.length ? '\n' + parts.join('  ') : ''), r.detail && (r.detail.backfire || r.detail.disaster || r.detail.caught || r.detail.success === false) ? 'bad' : 'good', 5200);
-      }
+      if (!o.silent) self.showActionResult(id, r);
       if (self.game.state.finished) self.showResult();
       return r;
     });
@@ -209,6 +206,23 @@
     if (st.ap === st.apMax) {
       WW.DOM.confirm('这回合一个行动都没做，确定直接结束回合吗？', { ok: '结束回合' }).then(function (ok) { if (ok) go(); });
     } else go();
+  };
+
+  /* Centered, enlarged result of a skill; stays until the player confirms. */
+  P.showActionResult = function (id, r) {
+    var item = this.game.items[id] || {};
+    var d = r.detail || {};
+    var bad = d.backfire || d.disaster || d.caught || d.success === false;
+    var m = WW.DOM.modal({
+      title: (item.icon || '') + ' ' + (item.name || id) + (bad ? ' · 出岔子了' : ' · 执行完毕'),
+      maskClose: false,
+      body: h('div', { class: 'act-result' + (bad ? ' bad' : ' good') },
+        h('div', { class: 'act-result-text' }, r.text),
+        deltaChips(r.deltas || {})),
+      footer: [h('button', { class: 'btn primary', on: { click: function () { m.close(); } } }, '知道了')]
+    });
+    m.el.classList.add('act-result-modal');
+    setTimeout(function () { var b = m.foot.querySelector('button'); if (b) b.focus(); }, 0);
   };
 
   P.finishCase = function () {
@@ -239,7 +253,7 @@
     this.left = h('div', { class: 'col-scroll', dataset: { pane: 'left' } });
     this.center = h('div', { class: 'center-col', dataset: { pane: 'center' } });
     this.right = h('div', { class: 'col-scroll', dataset: { pane: 'right' } });
-    var tabs = h('div', { class: 'mobile-tabs' }, [['left', '📊 仪表盘'], ['center', '🗞 舆论场'], ['right', '🧰 道具任务']].map(function (t) {
+    var tabs = h('div', { class: 'mobile-tabs' }, [['left', '📊 仪表盘'], ['center', '🗞 舆论场'], ['right', '🧰 技能任务']].map(function (t) {
       return h('button', { class: 'btn small' + (self.pane === t[0] ? ' accent' : ''), dataset: { p: t[0] }, on: { click: function () { self.pane = t[0]; self.applyPane(); } } }, t[1]);
     }));
     this.mobileTabs = tabs;
@@ -546,7 +560,7 @@
       });
       return btn;
     });
-    return h('div', { class: 'panel', dataset: { coach: 'items' } }, h('div', { class: 'panel-title' }, '🧰 道具'), h('div', { class: 'items-grid' }, buttons));
+    return h('div', { class: 'panel', dataset: { coach: 'items' } }, h('div', { class: 'panel-title' }, '🧰 技能'), h('div', { class: 'items-grid' }, buttons));
   };
 
   P.renderChat = function () {
@@ -660,7 +674,7 @@
     } else {
       body.push(h('div', { class: 'coach-title' }, '本回合的教学完成了'));
       body.push(h('div', { class: 'coach-text' }, st.ap > 0
-        ? '还有 ' + st.ap + ' 个行动点，可以自由使用道具；不想用也没关系，点右上角「结束回合 ▶」进入下一回合。'
+        ? '还有 ' + st.ap + ' 个行动点，可以自由使用技能；不想用也没关系，点右上角「结束回合 ▶」进入下一回合。'
         : '行动点用完了。点右上角「结束回合 ▶」进入下一回合，看看晨报里发生了什么。'));
     }
     var buttons = [];
@@ -824,10 +838,10 @@
       title: '玩法说明', wide: true,
       body: h('div', null,
         h('div', { class: 'small sub' }, '你经营一家危机公关公司。每一关是一单委托：在合同期内用预算和行动点操控舆论，完成主任务即可结案。完整机制见 docs/Gameplay.md。'),
-        sec('回合', ['每回合有若干行动点，道具消耗行动点和预算。', '点「结束回合」后：对手按意图出招 → 舆论演化 → 回合间事件与证据曝光 → AI 生成新的网评、热搜与客户巨信。']),
+        sec('回合', ['每回合有若干行动点，技能消耗行动点和预算。', '点「结束回合」后：对手按意图出招 → 舆论演化 → 回合间事件与证据曝光 → AI 生成新的网评、热搜与客户巨信。']),
         sec('五个数值', ['舆论好感：核心 KPI，由各阵营好感按人口加权。', '热度：会自然衰减；越热，负面越容易发酵、水军越难起效。', '公信力：公文效果的乘数；撒谎被打脸会暴跌。', '暴露度：网友对“有人操控”的怀疑；满 100 直接翻车。', '客户满意度：归零会被解约。']),
         sec('真相与风险', ['客户口径不一定是真的；「内部摸底调查」可以核实。', '在公文里否认真相会记“谎言债”，证据曝光时会被打脸；否认谣言则会在真相大白时得到印证。', '水军、删帖、控评、撤热搜都会累积暴露度，可能被扒。', '「召唤铁拳」只砸真违规：举报说真话的人会失败，甚至引来监管反查。']),
-        sec('主任务与对手', ['主任务分阶段，每阶段由子任务组成；完成阶段会解锁更高级道具、追加预算。', '支线是额外委托，有额外奖励，也可能有惩罚。', '对手有自己的经典招式：抱团举报、告洋状、吃黑流量、召唤铁拳……部署「舆情监测」后能提前看到对手下回合的意图。']),
+        sec('主任务与对手', ['主任务分阶段，每阶段由子任务组成；完成阶段会解锁更高级技能、追加预算。', '支线是额外委托，有额外奖励，也可能有惩罚。', '对手有自己的经典招式：抱团举报、告洋状、吃黑流量、召唤铁拳……部署「舆情监测」后能提前看到对手下回合的意图。']),
         sec('AI', ['在「AI 设置」里配置接口后，公文补全、评审、筛帖、水军内容、网评、结案报告都由 AI 生成；数值始终由游戏引擎计算。', '没有配置也能完整游玩，所有 AI 功能都有离线规则兜底。'])),
       footer: false
     });

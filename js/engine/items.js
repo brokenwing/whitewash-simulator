@@ -48,7 +48,7 @@
       });
       if (unlocks.length) return '完成主任务阶段「' + stages[i].title + '」后解锁';
     }
-    return (D.tierNames[item.tier] || '') + '道具，推进主任务后解锁';
+    return (D.tierNames[item.tier] || '') + '技能，推进主任务后解锁';
   }
 
   function status(game, id, params) {

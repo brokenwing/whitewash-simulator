@@ -15,8 +15,8 @@
     faction:   { label: '阵营好感', fields: ['faction', 'delta'] },
     budget:    { label: '预算', fields: ['delta'] },
     ap:        { label: '行动点', fields: ['delta', 'permanent'] },
-    unlock:    { label: '解锁道具', fields: ['items', 'tier'] },
-    lockItem:  { label: '封锁道具', fields: ['items', 'turns'] },
+    unlock:    { label: '解锁技能', fields: ['items', 'tier'] },
+    lockItem:  { label: '封锁技能', fields: ['items', 'turns'] },
     voucher:   { label: '一次性券', fields: ['item', 'count'] },
     posts:     { label: '生成帖子', fields: ['count', 'stance', 'hint', 'fact', 'platform', 'tier', 'faction'] },
     reveal:    { label: '曝光事实', fields: ['fact'] },
@@ -141,7 +141,7 @@
       case 'ap': return (e.permanent ? '每回合行动点 ' : '行动点 ') + U.signed(e.delta);
       case 'unlock': {
         var parts = [];
-        if (e.tier) parts.push('解锁' + (WW.Data.tierNames[e.tier] || e.tier) + '道具');
+        if (e.tier) parts.push('解锁' + (WW.Data.tierNames[e.tier] || e.tier) + '技能');
         if (e.items && e.items.length) parts.push('解锁「' + [].concat(e.items).map(itemName).join('、') + '」');
         return parts.join('，');
       }

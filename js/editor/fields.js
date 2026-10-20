@@ -205,18 +205,18 @@
       ]
     },
     {
-      id: 'items', title: '道具', icon: '🧰',
-      desc: '从道具库里选择本关可用的道具；道具按层级随主任务阶段解锁，也可以单独写解锁条件；还能写只属于本关的“自定义 AI 道具”。',
+      id: 'items', title: '技能', icon: '🧰',
+      desc: '从技能库里选择本关可用的技能；技能按层级随主任务阶段解锁，也可以单独写解锁条件；还能写只属于本关的“自定义 AI 技能”。',
       fields: [
-        { key: 'items.enabled', label: '启用的库道具', type: 'multi', options: 'libraryItems', full: true },
+        { key: 'items.enabled', label: '启用的库技能', type: 'multi', options: 'libraryItems', full: true },
         { key: 'items.startTier', label: '开局已解锁的层级', type: 'select', options: [{ value: 1, label: '1 基础' }, { value: 2, label: '2 进阶' }, { value: 3, label: '3 高阶' }] },
         { key: 'items.unlocks', label: '单独解锁条件', type: 'condMap', options: 'items', full: true },
         { key: 'items.overrides', label: '参数覆盖（JSON，如 {"rectify":{"tier":2,"name":"全面整改"}}）', type: 'json', full: true },
         {
-          key: 'items.custom', label: '自定义 AI 道具', type: 'list', full: true,
-          itemTitle: function (it) { return (it.icon || '✨') + ' ' + (it.name || '新道具'); },
+          key: 'items.custom', label: '自定义 AI 技能', type: 'list', full: true,
+          itemTitle: function (it) { return (it.icon || '✨') + ' ' + (it.name || '新技能'); },
           newItem: function (lv) {
-            return { id: nextId(lv.items && lv.items.custom, 'custom'), name: '新道具', icon: '✨', tier: 1, ap: 1, cost: 5, channel: 'statement', desc: '', risk: '',
+            return { id: nextId(lv.items && lv.items.custom, 'custom'), name: '新技能', icon: '✨', tier: 1, ap: 1, cost: 5, channel: 'statement', desc: '', risk: '',
               effect: { prompt: '', inputLabel: '', bounds: { sentiment: [-4, 8], heat: [-6, 6], exposure: [0, 6] }, offlineDeltas: null, posts: 2, stance: 1, effects: [] } };
           },
           fields: [
@@ -231,7 +231,7 @@
             { key: 'channel', label: '作用渠道', type: 'select', options: 'channels' },
             { key: 'desc', label: '描述', type: 'text', full: true },
             { key: 'risk', label: '风险说明', type: 'text', full: true },
-            { key: 'effect.prompt', label: '给 AI 的道具规则', type: 'textarea', full: true },
+            { key: 'effect.prompt', label: '给 AI 的技能规则', type: 'textarea', full: true },
             { key: 'effect.inputLabel', label: '玩家输入框提示', type: 'text' },
             { key: 'effect.posts', label: '生成帖子数', type: 'number' },
             { key: 'effect.stance', label: '帖子立场', type: 'select', options: STANCES },
@@ -244,7 +244,7 @@
     },
     {
       id: 'objectives', title: '主任务与子任务', icon: '🏁',
-      desc: '主任务分阶段推进：阶段内必做子任务全部完成即进入下一阶段并发放阶段奖励（常用来解锁道具层级、追加预算）。可选子任务和支线提供额外奖励。',
+      desc: '主任务分阶段推进：阶段内必做子任务全部完成即进入下一阶段并发放阶段奖励（常用来解锁技能层级、追加预算）。可选子任务和支线提供额外奖励。',
       fields: [
         {
           key: 'objectives.stages', label: '主任务阶段', type: 'list', full: true,
@@ -458,7 +458,7 @@
             { key: 'turn', label: '最早出现的回合', type: 'number', min: 1 },
             { key: 'at', label: '显示位置', type: 'select', options: [{ value: 'play', label: '游戏中（教程卡片）' }, { value: 'result', label: '结算页（教程小结）' }] },
             { key: 'text', label: '内容', type: 'textarea', full: true },
-            { key: 'target', label: '高亮目标（item:道具ID、post:fact:事实ID、post:negative、end-turn、finish、tasks、side:支线ID、dashboard、feed、opponents、chat）', type: 'text', full: true },
+            { key: 'target', label: '高亮目标（item:技能ID、post:fact:事实ID、post:negative、end-turn、finish、tasks、side:支线ID、dashboard、feed、opponents、chat）', type: 'text', full: true },
             { key: 'when', label: '出现条件（留空 = 总是）', type: 'cond', full: true },
             { key: 'done', label: '完成条件（留空 = 玩家点“下一步”）', type: 'cond', full: true },
             { key: 'skip', label: '跳过条件', type: 'cond', full: true },
