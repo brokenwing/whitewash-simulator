@@ -97,7 +97,7 @@
     incident: { summary: '', background: '', keywords: [], severity: 50 },
     facts: [],
     contract: { turns: 8, actionPoints: 3, budget: 80, currency: '万元', slotsPerDay: 2, turnLabels: [] },
-    difficulty: { allowed: ['intern', 'regular', 'gold', 'hell'], overrides: {} },
+    difficulty: { allowed: ['intern', 'regular', 'gold'], overrides: {} },
     initialStats: { sentiment: -40, heat: 70, credibility: 55, exposure: 0, satisfaction: 70 },
     tuning: {
       heatDecay: 0.2, pressureWeight: 16, credibilityWeight: 0.3, severityWeight: 0.25, driftRate: 1,

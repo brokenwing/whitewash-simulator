@@ -31,6 +31,7 @@
     this.busy = false;
     if (opts.save && opts.save.state) {
       this.state = opts.save.state;
+      this.state.difficulty = D.difficultyId(this.state.difficulty);
       this.diff = resolveDifficulty(this.level, this.state.difficulty);
       this.rng = new U.Rng(0);
       this.rng.s = this.state.rngState >>> 0;
@@ -180,6 +181,7 @@
   P.shiftFactions = function (impulse, channel, opts) {
     opts = opts || {};
     impulse = Number(impulse) || 0;
+    if (impulse > 0) impulse *= this.diff.powerMul || 1;
     var st = this.state;
     var ch = D.channels[channel] || D.channels.event;
     var persist = opts.persist !== undefined ? opts.persist : ch.persist;
@@ -335,6 +337,31 @@
     return out;
   };
 
+  /* Difficulty `cushion` (0-1): that share of the harm a player's own action does to them is absorbed
+   * (faction sentiment/bias drops, credibility and satisfaction losses, heat gains). */
+  P.cushionMark = function () {
+    var st = this.state;
+    var f = {};
+    Object.keys(st.factions).forEach(function (id) { f[id] = { s: st.factions[id].sentiment, b: st.factions[id].bias }; });
+    return { f: f, credibility: st.stats.credibility, satisfaction: st.stats.satisfaction, heat: st.stats.heat };
+  };
+
+  P.cushion = function (mark) {
+    var r = this.diff.cushion || 0;
+    if (!r || !mark) return;
+    var st = this.state;
+    Object.keys(mark.f).forEach(function (id) {
+      var f = st.factions[id];
+      if (!f) return;
+      if (f.sentiment < mark.f[id].s) f.sentiment += (mark.f[id].s - f.sentiment) * r;
+      if (f.bias < mark.f[id].b) f.bias += (mark.f[id].b - f.bias) * r;
+    });
+    if (st.stats.credibility < mark.credibility) st.stats.credibility += (mark.credibility - st.stats.credibility) * r;
+    if (st.stats.satisfaction < mark.satisfaction) st.stats.satisfaction += (mark.satisfaction - st.stats.satisfaction) * r;
+    if (st.stats.heat > mark.heat) st.stats.heat -= (st.stats.heat - mark.heat) * r;
+    this.recompute();
+  };
+
   P.historyPoint = function () {
     var st = this.state;
     return {
@@ -402,15 +429,17 @@
     var cost = status.cost;
     var useVoucher = status.voucher > 0;
     var before = this.snapshot();
+    var mark = this.diff.cushion ? this.cushionMark() : null;
     this.busy = true;
     this.emit('busy', true);
     return Promise.resolve().then(function () {
       return handler.run(self, item, params);
     }).then(function (res) {
       if (!res || res.cancelled) return { ok: false, reason: res ? res.reason : '已取消' };
+      self.cushion(mark);
       if (useVoucher) st.items.vouchers[id] -= 1;
       else self.spend(cost);
-      st.ap = Math.max(0, st.ap - (item.ap || 0));
+      if (!self.diff.unlimited) st.ap = Math.max(0, st.ap - (item.ap || 0));
       st.itemUses[id] = (st.itemUses[id] || 0) + 1;
       st.itemUsesTurn[id] = (st.itemUsesTurn[id] || 0) + 1;
       if (item.cooldown) st.items.readyTurn[id] = st.turn + item.cooldown;

@@ -120,7 +120,7 @@
         { key: 'initialStats.exposure', label: '开局暴露度', type: 'number', min: 0, max: 100 },
         { key: 'initialStats.satisfaction', label: '开局客户满意度', type: 'number', min: 0, max: 100 },
         { key: 'difficulty.allowed', label: '开放的难度', type: 'multi', options: 'difficulties', full: true },
-        { key: 'difficulty.overrides', label: '难度覆盖（JSON，如 {"hell":{"budgetMul":0.6}}）', type: 'json', full: true },
+        { key: 'difficulty.overrides', label: '难度覆盖（JSON，如 {"gold":{"budgetMul":0.6}}）', type: 'json', full: true },
         {
           key: 'tuning', label: '演化参数', type: 'object', full: true,
           fields: [

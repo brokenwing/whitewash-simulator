@@ -59,6 +59,14 @@
     res.cost = cost(game, id, params);
     res.voucher = st.items.vouchers[id] || 0;
     if (st.finished) { res.reason = '已结案'; return res; }
+    if (game.diff && game.diff.unlimited) {
+      /* 看不见的大手: only the budget (and a passive skill already deployed) can stop you */
+      res.ap = 0;
+      if (item.passive && st.itemUses[id]) { res.reason = '已部署，全程生效'; return res; }
+      if (!res.voucher && res.cost > st.budget + 1e-9) { res.reason = '预算不足'; return res; }
+      res.usable = true;
+      return res;
+    }
     if (!isUnlocked(game, id)) { res.locked = true; res.reason = unlockHint(game, id); return res; }
     var lockedUntil = st.items.locked[id];
     if (lockedUntil && st.turn < lockedUntil) { res.reason = '被封锁至第 ' + lockedUntil + ' 回合'; return res; }

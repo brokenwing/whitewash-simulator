@@ -112,7 +112,7 @@
       diffCards,
       h('div', { class: 'sign-row' },
         h('button', { class: 'btn', style: { color: '#1b1b1a', background: '#fff' }, on: { click: function () { self.exit(); } } }, '返回'),
-        saved && saved.state && !saved.state.finished ? h('button', { class: 'btn', style: { color: '#1b1b1a', background: '#fff' }, on: { click: function () { self.resume(saved); } } }, '继续上次（' + D.difficulties[saved.state.difficulty].name + ' · 第 ' + saved.state.turn + ' 回合）') : null,
+        saved && saved.state && !saved.state.finished ? h('button', { class: 'btn', style: { color: '#1b1b1a', background: '#fff' }, on: { click: function () { self.resume(saved); } } }, '继续上次（' + D.difficulties[D.difficultyId(saved.state.difficulty)].name + ' · 第 ' + saved.state.turn + ' 回合）') : null,
         h('button', { class: 'btn primary', on: { click: function () {
           seal.classList.add('show');
           setTimeout(function () { self.start(chosen); }, 600);
@@ -203,7 +203,7 @@
         self.showTurnBriefing(r.briefing);
       });
     };
-    if (st.ap === st.apMax) {
+    if (!st.turnActions.length) {
       WW.DOM.confirm('这回合一个行动都没做，确定直接结束回合吗？', { ok: '结束回合' }).then(function (ok) { if (ok) go(); });
     } else go();
   };
@@ -286,8 +286,10 @@
     var g = this.game;
     var st = g.state;
     var lv = this.level;
-    var pips = h('span', { class: 'ap-pips', title: '行动点 ' + st.ap + '/' + st.apMax });
-    for (var i = 0; i < st.apMax; i++) pips.appendChild(h('i', { class: i < st.ap ? '' : 'used' }));
+    var pips = g.diff.unlimited
+      ? h('b', { title: '看不见的大手：技能不耗行动点' }, '∞')
+      : h('span', { class: 'ap-pips', title: '行动点 ' + st.ap + '/' + st.apMax });
+    if (!g.diff.unlimited) for (var i = 0; i < st.apMax; i++) pips.appendChild(h('i', { class: i < st.ap ? '' : 'used' }));
     var prog = Math.round(st.objectives.progress * 100);
     this.endBtn = h('button', { class: 'btn primary', dataset: { coach: 'end-turn' }, disabled: g.busy || st.finished, on: { click: function () { self.endTurn(); } } }, '结束回合 ▶');
     WW.DOM.replace(this.topbar,
@@ -548,7 +550,7 @@
       var status = g.itemStatus(id);
       var targetItem = item.target === 'post' || item.target === 'postOrOpponent' || item.target === 'opponent' || item.target === 'fact' || item.target === 'criterion';
       var usable = status.usable;
-      var sub = status.locked ? '🔒 ' + status.reason : usable ? (status.voucher ? '免费券 ×' + status.voucher : (item.handler === 'shill' || item.handler === 'delete' || item.handler === 'throttle' || item.handler === 'kol' || item.handler === 'settle' || item.handler === 'coopt' ? '按方案计价' : U.fmtMoney(status.cost))) + ' · ' + item.ap + 'AP' : status.reason;
+      var sub = status.locked ? '🔒 ' + status.reason : usable ? (status.voucher ? '免费券 ×' + status.voucher : (item.handler === 'shill' || item.handler === 'delete' || item.handler === 'throttle' || item.handler === 'kol' || item.handler === 'settle' || item.handler === 'coopt' ? '按方案计价' : U.fmtMoney(status.cost))) + (status.ap ? ' · ' + status.ap + 'AP' : '') : status.reason;
       var btn = h('button', { class: 'item-btn' + (status.locked ? ' locked disabled' : usable ? '' : ' disabled'), dataset: { coach: 'item:' + id }, on: { click: function () {
         if (!usable) { WW.DOM.toast('「' + item.name + '」' + status.reason, 'warn'); return; }
         WW.ItemUI.open(self, id, {});
@@ -673,7 +675,9 @@
       if (outOfAp) body.push(h('div', { class: 'coach-note' }, '这回合的行动点用完了：点右上角「结束回合 ▶」，下回合再继续这一步。'));
     } else {
       body.push(h('div', { class: 'coach-title' }, '本回合的教学完成了'));
-      body.push(h('div', { class: 'coach-text' }, st.ap > 0
+      body.push(h('div', { class: 'coach-text' }, g.diff.unlimited
+        ? '技能不限次数，想继续出手就继续；不想用了就点右上角「结束回合 ▶」进入下一回合。'
+        : st.ap > 0
         ? '还有 ' + st.ap + ' 个行动点，可以自由使用技能；不想用也没关系，点右上角「结束回合 ▶」进入下一回合。'
         : '行动点用完了。点右上角「结束回合 ▶」进入下一回合，看看晨报里发生了什么。'));
     }

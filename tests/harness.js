@@ -104,19 +104,24 @@ function createBots(WW) {
     return tryAct(game, 'delete', { criterion, ids });
   }
 
+  /* Actions taken this turn; a strategy loop stops when nothing more happened or, under the
+   * 看不见的大手 preset (skills cost no AP), after a regular turn's worth of actions plus a few. */
+  function acted(game) { return game.state.turnActions.length; }
+  function stuck(game, before) { return acted(game) === before || acted(game) >= game.state.apMax + 3; }
+
   const STRATEGIES = {
     idle: async () => {},
 
     shill: async (game) => {
       const st = game.state;
       while (st.ap > 0 && !st.finished) {
-        const before = st.ap;
+        const before = acted(game);
         (await tryAct(game, 'trend_remove')) ||
           (await tryAct(game, 'shill', { tier: 'normal', count: 300, direction: '大家理性看待，事情还在调查中，别被带节奏' })) ||
           (await deleteSome(game, '骂客户的负面帖子', 4)) ||
           (topNegative(game)[0] && (await tryAct(game, 'control', { postId: topNegative(game)[0].id }))) ||
           (await tryAct(game, 'distraction'));
-        if (st.ap === before) break;
+        if (stuck(game, before)) break;
       }
     },
 
@@ -124,7 +129,7 @@ function createBots(WW) {
       const st = game.state;
       if (st.turn === 1) await tryAct(game, 'statement', { type: 'apology', channel: 'weibo', text: statementText(game, 'apology', 1, 1) });
       while (st.ap > 0 && !st.finished) {
-        const before = st.ap;
+        const before = acted(game);
         const pending = st.promises.some((p) => p.status === 'pending');
         (!st.flags.rectified && (await tryAct(game, 'rectify'))) ||
           (!st.counters.settled && (await tryAct(game, 'settle', { scale: 'medium' }))) ||
@@ -132,7 +137,7 @@ function createBots(WW) {
           (await tryAct(game, 'monitor')) ||
           (await tryAct(game, 'kol', { tier: 'small', brief: '梳理时间线和整改措施，理性看待' })) ||
           (st.counters.statementsTurn === 0 && (await tryAct(game, 'statement', { type: 'explain', channel: 'weibo', text: statementText(game, 'explain', 1, 1) })));
-        if (st.ap === before) break;
+        if (stuck(game, before)) break;
       }
     },
 
@@ -140,7 +145,7 @@ function createBots(WW) {
       const st = game.state;
       if (st.turn === 1) await tryAct(game, 'statement', { type: 'explain', channel: 'weibo', text: statementText(game, 'explain', 1, 0) });
       while (st.ap > 0 && !st.finished) {
-        const before = st.ap;
+        const before = acted(game);
         const facts = Object.values(st.facts);
         const unknown = facts.find((f) => !f.known && f.public && !f.revealed && !f.refuted);
         const knownFalse = facts.find((f) => f.known && !f.isTrue && !f.refuted);
@@ -157,7 +162,7 @@ function createBots(WW) {
           (topNegative(game, (p) => p.author.tier !== 'normal')[0] && (await tryAct(game, 'control', { postId: topNegative(game, (p) => p.author.tier !== 'normal')[0].id }))) ||
           (st.counters.statementsTurn === 0 && (await tryAct(game, 'statement', { type: 'explain', channel: 'weibo', text: statementText(game, 'explain', 1, 1) }))) ||
           (await tryAct(game, 'shill', { tier: 'premium', count: 100, direction: '其实整改措施已经公布了，大家可以看看原始信息' }));
-        if (st.ap === before) break;
+        if (stuck(game, before)) break;
       }
     },
 
@@ -169,7 +174,7 @@ function createBots(WW) {
         await tryAct(game, 'statement', { type: pending ? 'rectify' : 'explain', channel: 'weibo', text: smartStatement(game) });
       }
       while (st.ap > 0 && !st.finished) {
-        const before = st.ap;
+        const before = acted(game);
         const rumorPost = WW.Feed.visible(st).find((p) => p.fact && st.facts[p.fact] && !st.facts[p.fact].isTrue && !st.facts[p.fact].refuted && !p.isClient);
         const handle = game.findHandle();
         const dirty = Object.values(st.opponents).find((o) => o.active && (o.flags.usedShill || o.flags.spreadRumor || (game.oppDef(o.id).dirt || []).length));
@@ -186,7 +191,7 @@ function createBots(WW) {
           (st.counters.statementsTurn === 0 && st.turn % 2 === 0 && (await tryAct(game, 'statement', { type: 'explain', channel: 'weibo', text: smartStatement(game) }))) ||
           (st.stats.heat > 50 && (await tryAct(game, 'distraction'))) ||
           (await tryAct(game, 'kol', { tier: 'small', brief: '整改进展与第三方监督情况' }));
-        if (st.ap === before) break;
+        if (stuck(game, before)) break;
       }
     },
 

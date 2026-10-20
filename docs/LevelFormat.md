@@ -51,7 +51,7 @@ flowchart LR
 | `incident` | 对象 | `summary` 概要、`background`、`keywords` 关键词（离线文本和热搜会用）、`severity` 严重度 0~100（越高，热度对好感的压制越强） |
 | `facts[]` | 对象 | 见下表 |
 | `contract` | 对象 | `turns` 回合数、`actionPoints` 每回合行动点、`budget` 预算（万元）、`slotsPerDay` 每天回合数 1/2/3、`turnLabels` 自定义回合名 |
-| `difficulty` | 对象 | `allowed` 开放的难度（intern/regular/gold/hell）、`overrides` 按档位覆盖参数 |
+| `difficulty` | 对象 | `allowed` 开放的难度（intern/regular/gold）、`overrides` 按档位覆盖参数 |
 | `initialStats` | 对象 | 开局的 `sentiment` `heat` `credibility` `exposure` `satisfaction` |
 | `tuning` | 对象 | 演化参数：`heatDecay` `pressureWeight` `credibilityWeight` `severityWeight` `spreadWeight` `exposureCooldown` `detectBase` `randomEventChance` `organicPosts` |
 | `factions[]` | 对象 | `id` `name` `desc` `size` 人口占比、`sentiment` 开局好感、`bias` 长期倾向、`volatility` 波动性 0~1、`sens` 各渠道敏感系数 |

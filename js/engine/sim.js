@@ -185,6 +185,8 @@
     var spread = Math.max(0, -P) * T.spreadWeight * (H / 100);
     st.stats.heat = U.clamp(H * (1 - T.heatDecay) + spread, 0, 100);
     if (!st.counters.manipTurn) game.addStat('exposure', -T.exposureCooldown);
+    /* difficulty exposureRelief: suspicion fades by this share every turn, even while manipulating */
+    if (game.diff.exposureRelief) game.addStat('exposure', -st.stats.exposure * game.diff.exposureRelief);
     detectShills(game, lines);
     rollRisks(game, lines);
     updateClient(game, lines, before);

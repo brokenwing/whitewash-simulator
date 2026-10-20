@@ -166,6 +166,26 @@ async function unitTests() {
     eq(WW.Guide.resultNotes(game).map((g) => g.id).join(), 'bye');
   });
 
+  await test('看不见的大手: every skill usable, no AP / cooldown / use limit', async () => {
+    const game = new WW.Engine.Game(WW.Levels.get('tutorial_crayfish'), { seed: 4, difficulty: 'intern' });
+    const st = game.state;
+    assert(game.itemOrder.every((id) => game.itemStatus(id).usable), 'all skills usable on turn 1');
+    const rumor = WW.Guide.findPost(game, 'fact:f2');
+    for (let i = 0; i < 3; i++) assert((await game.act('iron_fist', { postId: rumor.id })).ok || st.facts.f2.refuted, 'iron fist again #' + i);
+    eq(st.ap, st.apMax, 'no AP spent');
+    const regular = new WW.Engine.Game(WW.Levels.get('tutorial_crayfish'), { seed: 4, difficulty: 'regular' });
+    assert(regular.itemStatus('rectify').locked, 'regular still gates tiers');
+  });
+
+  await test('retired 地狱 saves resume as 金牌公关', () => {
+    const lv = WW.Levels.get('tutorial_crayfish');
+    const save = JSON.parse(JSON.stringify(new WW.Engine.Game(lv, { seed: 6, difficulty: 'gold' }).serialize()));
+    save.state.difficulty = 'hell';
+    const back = WW.Engine.restore(lv, save);
+    eq(back.state.difficulty, 'gold');
+    eq(back.diff.name, WW.Data.difficulties.gold.name);
+  });
+
   await test('tutorial: following the guide card wins', async () => {
     const lv = WW.Levels.get('tutorial_crayfish');
     for (const diff of ['intern', 'regular', 'gold']) {

@@ -147,7 +147,7 @@
           var state = f.revealed ? '（已实锤）' : f.refuted ? '（已证伪）' : f.known ? (f.isTrue ? '（你已查明：属实）' : '（你已查明：不实）') : '';
           return h('div', { class: 'small' }, '· ' + f.text + state, f.clientClaim && !f.revealed ? h('div', { class: 'tiny muted' }, '　客户口径：' + f.clientClaim) : null);
         })) : null,
-      h('div', { class: 'tiny muted' }, '花费 ' + U.fmtMoney(status.cost) + ' · ' + item.ap + ' 行动点' + (st.counters.statementsTurn ? ' · 本回合已发 ' + st.counters.statementsTurn + ' 篇，效果递减' : '')));
+      h('div', { class: 'tiny muted' }, '花费 ' + U.fmtMoney(status.cost) + ' · ' + (status.ap ? status.ap + ' 行动点' : '不耗行动点') + (st.counters.statementsTurn ? ' · 本回合已发 ' + st.counters.statementsTurn + ' 篇，效果递减' : '')));
 
     var body = h('div', { class: 'doc-editor' }, h('div', { class: 'col' }, doc, h('div', { class: 'row' }, counter, h('div', { class: 'spacer' }), styleBtn)), side);
 

@@ -10,14 +10,21 @@
  *  patienceMul  client patience (satisfaction losses are divided by it)
  *  passWeight   weight of the "do nothing" option in opponent move selection
  *  savvy        how sharp netizens are; injected into AI prompts
+ *  powerMul     multiplier on every favourable opinion impulse (default 1)
+ *  cushion      share (0-1) of the harm a player's own action does that is absorbed (default 0)
+ *  exposureRelief share of exposure that fades every turn, even while manipulating (default 0)
+ *  unlimited    every skill is unlocked from the start, costs no action points and ignores
+ *               cooldowns, use limits and prerequisites (budget still applies)
  */
 (function (WW) {
   'use strict';
 
   WW.Data.difficulties = {
     intern: {
-      id: 'intern', name: '实习生', icon: '🐣', desc: '预算宽裕，网友好糊弄，对手也不太上心。适合熟悉玩法。',
-      budgetMul: 1.3, apDelta: 1, exposureMul: 0.7, detectMul: 0.6, oppMul: 0.6, oppSmart: 0, patienceMul: 1.4,
+      id: 'intern', name: '看不见的大手', icon: '🫳', unlimited: true,
+      desc: '你就是舆论场背后那只手，对局面的掌控力强到离谱：全部技能开局即用，不耗行动点、没有冷却和次数限制，只看预算够不够。',
+      budgetMul: 2, apDelta: 1, exposureMul: 0.2, detectMul: 0.2, oppMul: 0.6, oppSmart: 0, patienceMul: 1.4,
+      powerMul: 2.5, cushion: 0.7, exposureRelief: 0.3,
       passWeight: 3, initialShift: { sentiment: 8, heat: -5 },
       savvy: '网友比较好糊弄，容易被带节奏，很少深究细节。'
     },
@@ -32,14 +39,14 @@
       budgetMul: 0.85, apDelta: 0, exposureMul: 1.25, detectMul: 1.3, oppMul: 1.3, oppSmart: 0.6, patienceMul: 0.8,
       passWeight: 0.8, initialShift: { sentiment: -3 },
       savvy: '网友爱较真，会对照时间线、翻旧帖、抓措辞漏洞。'
-    },
-    hell: {
-      id: 'hell', name: '地狱', icon: '🔥', desc: '人均福尔摩斯，对手招招致命，客户耐心极差。',
-      budgetMul: 0.75, apDelta: 0, exposureMul: 1.4, detectMul: 1.5, oppMul: 1.5, oppSmart: 1, patienceMul: 0.7,
-      passWeight: 0.3, initialShift: { sentiment: -6, heat: 5 },
-      savvy: '人均福尔摩斯：任何破绽、措辞、时间差都会被扒出来并做成梗。'
     }
   };
 
-  WW.Data.difficultyOrder = ['intern', 'regular', 'gold', 'hell'];
+  WW.Data.difficultyOrder = ['intern', 'regular', 'gold'];
+
+  /* Removed presets map to their closest survivor so old saves still load. */
+  var RETIRED = { hell: 'gold' };
+  WW.Data.difficultyId = function (id) {
+    return WW.Data.difficulties[id] ? id : RETIRED[id] || 'regular';
+  };
 })(window.WW);
