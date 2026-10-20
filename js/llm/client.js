@@ -27,7 +27,7 @@
     { id: 'doubao', name: '豆包（火山方舟）', format: 'openai', baseURL: 'https://ark.cn-beijing.volces.com/api/v3', models: [], keyHint: '模型处填推理接入点 ID' },
     { id: 'siliconflow', name: '硅基流动', format: 'openai', baseURL: 'https://api.siliconflow.cn/v1', models: ['deepseek-ai/DeepSeek-V3', 'Qwen/Qwen2.5-72B-Instruct'], keyHint: 'sk-…' },
     { id: 'openrouter', name: 'OpenRouter', format: 'openai', baseURL: 'https://openrouter.ai/api/v1', models: ['deepseek/deepseek-chat', 'qwen/qwen-2.5-72b-instruct'], keyHint: 'sk-or-…' },
-    { id: 'gemini', name: 'Google Gemini', format: 'openai', baseURL: 'https://generativelanguage.googleapis.com/v1beta/openai', models: ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.5-flash-lite'], keyHint: 'AIza…（Google AI Studio 获取）', reasoning: true, maxOutput: 16000 },
+    { id: 'gemini', name: 'Google Gemini', format: 'openai', baseURL: 'https://generativelanguage.googleapis.com/v1beta/openai', models: ['gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-3-flash-preview', 'gemini-3.1-pro-preview', 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite'], keyHint: 'AIza…（Google AI Studio 获取）', reasoning: true, maxOutput: 16000 },
     { id: 'ollama', name: '本地 Ollama', format: 'openai', baseURL: 'http://localhost:11434/v1', models: ['qwen2.5:14b', 'qwen2.5:7b'], keyHint: '无需 Key', noKey: true },
     { id: 'lmstudio', name: '本地 LM Studio', format: 'openai', baseURL: 'http://localhost:1234/v1', models: [], keyHint: '无需 Key；模型处填 LM Studio 中已加载模型的标识，并在服务器设置里开启 CORS', noKey: true, jsonFormat: 'json_schema', reasoning: true },
     { id: 'custom', name: '自定义（OpenAI 兼容）', format: 'openai', baseURL: '', models: [], keyHint: '' }

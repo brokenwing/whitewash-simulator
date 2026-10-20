@@ -36,7 +36,7 @@
 | 豆包（火山方舟） | OpenAI 兼容 | `https://ark.cn-beijing.volces.com/api/v3` | 填推理接入点 ID |
 | 硅基流动 | OpenAI 兼容 | `https://api.siliconflow.cn/v1` | `deepseek-ai/DeepSeek-V3` |
 | OpenRouter | OpenAI 兼容 | `https://openrouter.ai/api/v1` | `deepseek/deepseek-chat` |
-| Google Gemini | OpenAI 兼容 | `https://generativelanguage.googleapis.com/v1beta/openai` | `gemini-2.5-flash` / `gemini-2.5-pro`（Key 在 Google AI Studio 获取） |
+| Google Gemini | OpenAI 兼容 | `https://generativelanguage.googleapis.com/v1beta/openai` | `gemini-3.8-flash` / `gemini-3.5-flash` / `gemini-3-flash-preview` / `gemini-3.1-pro-preview` / `gemini-3.5-flash-lite`（Key 在 Google AI Studio 获取） |
 | 本地 Ollama | OpenAI 兼容 | `http://localhost:11434/v1` | `qwen2.5:14b`（无需 Key） |
 | 本地 LM Studio | OpenAI 兼容 | `http://localhost:1234/v1` | 填 LM Studio 中已加载模型的标识（无需 Key） |
 

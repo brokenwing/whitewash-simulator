@@ -10,18 +10,30 @@
     return h('div', { class: 'field' }, h('label', null, label), control, help ? h('div', { class: 'tiny muted' }, help) : null);
   }
 
+  /* Dictionary order mixing Latin and Chinese names: a Chinese name files under its pinyin initial
+     (the zh collator alone puts every Han name before every Latin one). */
+  var zh = new Intl.Collator('zh-Hans-CN');
+  var PINYIN_BOUNDS = '阿八嚓哒妸发旮哈讥讥咔垃痳拏噢妑七呥扨它穵穵穵夕丫帀';
+  function initial(name) {
+    var c = name.charAt(0);
+    if (/[A-Za-z]/.test(c)) return c.toUpperCase();
+    for (var i = PINYIN_BOUNDS.length - 1; i >= 0; i--) if (zh.compare(c, PINYIN_BOUNDS[i]) >= 0) return String.fromCharCode(65 + i);
+    return c;
+  }
+  function byName(a, b) { return initial(a.name).localeCompare(initial(b.name)) || zh.compare(a.name, b.name); }
+
   function open(opts) {
     opts = opts || {};
     var s = WW.LLM.getSettings();
     var key = WW.LLM.getKey();
-    var presetSel = h('select', { class: 'input' }, WW.LLM.PRESETS.map(function (p) { return h('option', { value: p.id, selected: p.id === s.provider }, p.name); }));
+    var presetSel = h('select', { class: 'input' }, WW.LLM.PRESETS.slice().sort(byName).map(function (p) { return h('option', { value: p.id, selected: p.id === s.provider }, p.name); }));
     var baseInput = h('input', { class: 'input', value: s.baseURL, placeholder: 'https://…' });
-    var modelInput = h('input', { class: 'input', value: s.model, list: 'ww-models' });
-    var modelList = h('datalist', { id: 'ww-models' });
+    var modelInput = h('input', { class: 'input', value: s.model, placeholder: '填写模型名' });
+    var modelPick = h('select', { class: 'input' }); /* preset models + "custom"; modelInput holds the real value */
     var canHost = WW.LLM.serverAvailable();
     var keyInput = h('input', { class: 'input', type: 'password', value: s.keyMode === 'server' ? '' : key, placeholder: '粘贴你的 API Key', autocomplete: 'off' });
     var keyMode = h('select', { class: 'input' },
-      h('option', { value: 'server', selected: s.keyMode === 'server', disabled: !canHost }, '交给本地服务保管（推荐，浏览器不留明文）'),
+      h('option', { value: 'server', selected: s.keyMode === 'server', disabled: !canHost }, canHost ? '交给本地服务保管（推荐，浏览器不留明文）' : '交给本地服务保管（需用 start.bat / start.sh 启动）'),
       h('option', { value: 'local', selected: s.keyMode === 'local' }, '保存在本浏览器（localStorage，明文）'),
       h('option', { value: 'session', selected: s.keyMode === 'session' }, '仅本次会话（关闭标签页即清除）'));
     var keyModeHelp = h('div', { class: 'tiny muted' });
@@ -59,11 +71,16 @@
 
     var syncPreset = function (applyDefaults) {
       var p = WW.LLM.preset(presetSel.value) || {};
-      WW.DOM.replace(modelList, (p.models || []).map(function (m) { return h('option', { value: m }); }));
       if (applyDefaults) {
         if (p.baseURL !== undefined) baseInput.value = p.baseURL;
         if (p.models) modelInput.value = p.models[0] || '';
       }
+      var models = p.models || [];
+      var cur = modelInput.value.trim();
+      WW.DOM.replace(modelPick, models.map(function (m) { return h('option', { value: m, selected: m === cur }, m); })
+        .concat([h('option', { value: '', selected: models.indexOf(cur) < 0 }, '自定义…')]));
+      modelPick.classList.toggle('hidden', !models.length);
+      modelInput.classList.toggle('hidden', models.indexOf(cur) >= 0);
       keyHint.textContent = p.keyHint ? 'Key 格式：' + p.keyHint : '';
       var isAnthropic = p.format === 'anthropic';
       anthropicOnly.classList.toggle('hidden', !isAnthropic);
@@ -100,6 +117,12 @@
       }, function (e) { WW.DOM.toast(e.message, 'bad'); }).then(refreshHeld);
     });
     presetSel.addEventListener('change', function () { syncPreset(true); refreshHeld(); });
+    modelPick.addEventListener('change', function () {
+      var custom = !modelPick.value;
+      if (!custom) modelInput.value = modelPick.value;
+      modelInput.classList.toggle('hidden', !custom);
+      if (custom) modelInput.focus();
+    });
     syncPreset(false);
     refreshHeld();
 
@@ -150,7 +173,7 @@
         h('div', { class: 'small sub' }, '游戏可以接入 Claude（Anthropic）或任何 OpenAI 兼容接口（DeepSeek、通义、Kimi、智谱、豆包、Gemini、Ollama、LM Studio…）。不配置也能玩：所有 AI 内容都有离线规则兜底。'),
         h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '12px' } },
           field('服务商', presetSel),
-          field('模型', h('div', null, modelInput, modelList), 'Claude 默认 claude-opus-5-5；想更快更省可选 claude-haiku-5-5'),
+          field('模型', h('div', { class: 'col' }, modelPick, modelInput), 'Claude 默认 claude-opus-5-5；想更快更省可选 claude-haiku-5-5'),
           field('接口地址（Base URL）', baseInput),
           field('API Key', keyInput, clearKeyBtn),
           field('Key 保存方式', keyMode, keyModeHelp),
