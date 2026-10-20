@@ -137,7 +137,128 @@ async function unitTests() {
       eq(WW.LLM.extractJSON('好的，结果如下：\n```json\n{"a": 1, "b": [1,2,],}\n```').a, 1);
       eq(WW.LLM.extractJSON('{"x": "含有}括号的字符串", "y": 2} 以上').y, 2);
     });
+    await test('extractJSON re-balances brackets small models get wrong', () => {
+      const X = WW.LLM.extractJSON;
+      eq(JSON.stringify(X('{"a":[1,2}')), '{"a":[1,2]}');                       // missing ]
+      eq(JSON.stringify(X('{"a":{"b":1}}},"c":2}')), '{"a":{"b":1},"c":2}');     // extra } no longer truncates silently
+      eq(JSON.stringify(X('{"a":[{"b":1}]}]}')), '{"a":[{"b":1}]}');            // trailing extra closers
+      eq(JSON.stringify(X('{"a":"x\ny","b":[1,2')), '{"a":"x\\ny","b":[1,2]}');  // raw newline, cut off at the end
+      let err = null;
+      eq(JSON.stringify(X('{"a":["说法\'x\']"}, "b": 1}')), '{"a":["说法\'x\']"],"b":1}'); // ] and } swapped
+      try { X('{"turn":1", "b": 2}'); } catch (e) { err = e; }
+      assert(err && err.code === 'json' && err.snippet, 'unfixable output reports the spot');
+    });
   }
+
+  await test('repairDraft moves misplaced sections, validate warns about them', () => {
+    const lv = WW.Schema.blank();
+    lv.side = [{ id: 'sd', title: '支线', complete: { var: 'turn', op: '>=', value: 3 } }];
+    lv.opponents = [{ id: 'o1', name: '对手', abilities: ['rumor'], guide: [{ text: 'x' }], ai: { style: '阴阳怪气' } }];
+    const v = WW.Schema.validate(lv);
+    assert(v.warnings.some((w) => w.path === 'side' && /objectives\.side/.test(w.msg)), 'top-level side warned');
+    assert(v.warnings.some((w) => w.path === 'opponents[0].ai'), 'nested ai warned');
+    const r = WW.Schema.repairDraft(lv);
+    eq(r.level.objectives.side[0].id, 'sd');
+    eq(r.level.ai.style, '阴阳怪气');
+    assert(r.level.guide === undefined && r.level.opponents[0].guide === undefined, 'tutorial steps dropped');
+    eq(r.fixes.length, 4);
+    assert(!WW.Schema.validate(r.level).warnings.some((w) => /会被忽略/.test(w.msg)), 'nothing left misplaced');
+  });
+
+  await test('validate flags tasks done at start and conditions that can never hold', () => {
+    const lv = WW.Schema.blank();
+    lv.objectives = {
+      stages: [{ id: 's1', title: '阶段', tasks: [{ id: 't1', title: '热度降到 60 以下', complete: { var: 'stats.heat', op: '<=', value: 60 } }] }],
+      side: [
+        { id: 'keep_bad', title: '零水军（缺 at:end）', offer: 'start', complete: { var: 'itemUses.shill', op: '==', value: 0 } },
+        { id: 'keep_ok', title: '零水军', offer: 'start', at: 'end', complete: { var: 'itemUses.shill', op: '==', value: 0 }, fail: { var: 'itemUses.shill', op: '>', value: 0 } },
+        { id: 'flag_bad', title: '透明', offer: 'start', complete: { var: 'flags.transparency', op: '==', value: true } },
+        { id: 'skill_bad', title: '调查', offer: 'start', complete: { var: 'itemUses.investigate', op: '>=', value: 1 } }
+      ]
+    };
+    lv.initialStats = { heat: 80 };
+    const w = WW.Schema.validate(lv).warnings.map((x) => x.path + ' ' + x.msg);
+    assert(w.some((x) => /side\[0\]\.complete .*开局/.test(x)), 'keep goal without at:end warned');
+    assert(!w.some((x) => /side\[1\]/.test(x)), 'at:end keep goal is fine');
+    assert(w.some((x) => /side\[2\]\.complete .*transparency/.test(x)), 'flag nothing sets warned');
+    assert(w.some((x) => /side\[3\]\.complete .*investigate/.test(x)), 'skill not enabled warned');
+    assert(!w.some((x) => /stages\[0\]/.test(x)), 'normal first-stage task not warned');
+  });
+
+  await test('validate flags required tasks that need a skill not unlocked yet at that stage', () => {
+    const lv = WW.Schema.blank();
+    lv.items.enabled = ['statement', 'investigate', 'rectify', 'kol'];
+    const t = (id, v) => ({ id, title: id, complete: { var: v, op: '>=', value: 1 } });
+    lv.objectives = { stages: [
+      { id: 's1', title: '一', rewards: [{ type: 'unlock', tier: 2, items: ['investigate'] }], tasks: [t('a', 'itemUses.statement'), t('b', 'flags.rectified')] },
+      { id: 's2', title: '二', rewards: [{ type: 'unlock', tier: 3 }], tasks: [t('c', 'itemUses.investigate'), t('d', 'itemUses.kol')] },
+      { id: 's3', title: '三', tasks: [t('e', 'flags.rectified')] }
+    ] };
+    const v = WW.Schema.validate(lv);
+    const hit = v.warnings.filter((x) => x.blocking && /还没|只解锁到/.test(x.msg)).map((x) => x.path);
+    eq(hit.join(','), 'objectives.stages[0].tasks[1].complete');
+  });
+
+  /* fake OpenAI-compatible server: answer(body) -> { content, finish } */
+  const fakeLLM = (answer) => {
+    const calls = [];
+    const fetch = async (url, init) => {
+      const body = JSON.parse(init.body);
+      calls.push(body);
+      const a = answer(body, calls.length);
+      const payload = { choices: [{ message: { content: a.content }, finish_reason: a.finish || 'stop' }], usage: { prompt_tokens: 100, completion_tokens: 50 } };
+      return { ok: true, status: 200, json: async () => payload, text: async () => JSON.stringify(payload), clone() { return this; } };
+    };
+    const c = loadContext({ extraGlobals: { fetch, AbortController } });
+    const L = c.WW.LLM;
+    L.saveSettings(Object.assign({}, L.DEFAULTS, { provider: 'custom', format: 'openai', baseURL: 'http://127.0.0.1:9/v1', model: 'fake', keyMode: 'local', aiLevel: 'full' }), 'k');
+    return { W: c.WW, calls };
+  };
+
+  await test('OpenAI path: finish_reason length is reported as truncation', async () => {
+    const { W } = fakeLLM(() => ({ content: '{"a":', finish: 'length' }));
+    const res = await W.LLM.chat({ system: 's', user: 'u' });
+    eq(res.finishReason, 'length');
+    let err = null;
+    try { await W.LLM.chat({ system: 's', user: 'u', shape: W.Shape.obj({ a: W.Shape.num(0) }) }); } catch (e) { err = e; }
+    assert(err && err.code === 'truncated' && /提示词 100/.test(err.message), 'structured task fails with token counts');
+  });
+
+  await test('LevelGen: section by section, one broken section repaired', async () => {
+    const tut = WW.Levels.get('tutorial_crayfish');
+    let broke = false;
+    const { W, calls } = fakeLLM((body) => {
+      const user = body.messages[1].content;
+      const keys = /顶层键只能是：(.+)。/.exec(user)[1].split('、');
+      const part = {};
+      keys.forEach((k) => { if (tut[k] !== undefined) part[k] = tut[k]; });
+      if (keys.indexOf('objectives') >= 0 && !broke) { broke = true; return { content: JSON.stringify(part).replace('"title"', '"title""') }; } // stray quote: needs the model repair round
+      return { content: JSON.stringify(part) };
+    });
+    const seen = [];
+    const r = await W.LevelGen.generate('测试事件', { turns: 6, budget: 80, onProgress: (rep) => { if (!rep.running) seen.push(rep.id); } });
+    eq(r.failed, null);
+    eq(seen.join(','), W.LevelGen.SECTIONS.map((s) => s.id).join(','));
+    eq(calls.length, W.LevelGen.SECTIONS.length + 1);
+    eq(r.reports.filter((x) => x.id === 'objectives')[0].repairs, 1);
+    assert(!r.validation.errors.length, JSON.stringify(r.validation.errors));
+    assert(r.level.guide === undefined, 'no tutorial steps in a generated level');
+  });
+
+  await test('LevelGen: a truncated section stops with the reason and keeps earlier sections', async () => {
+    const tut = WW.Levels.get('tutorial_crayfish');
+    const { W } = fakeLLM((body) => {
+      const keys = /顶层键只能是：(.+)。/.exec(body.messages[1].content)[1].split('、');
+      if (keys.indexOf('personas') >= 0) return { content: '{"personas": [', finish: 'length' };
+      const part = {};
+      keys.forEach((k) => { if (tut[k] !== undefined) part[k] = tut[k]; });
+      return { content: JSON.stringify(part) };
+    });
+    const r = await W.LevelGen.generate('测试事件', { turns: 6, budget: 80 });
+    eq(r.failed, 'people');
+    assert(/输出被截断/.test(r.reports[1].error), r.reports[1].error);
+    eq(r.draft.facts.length, tut.facts.length);
+  });
 
   await test('guide: tips expire, steps wait for their condition and complete by themselves', async () => {
     const lv = WW.Schema.blank();

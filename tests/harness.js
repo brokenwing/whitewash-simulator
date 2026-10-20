@@ -19,7 +19,8 @@ const FILES = [
   'js/engine/cond.js', 'js/engine/effects.js', 'js/engine/schema.js', 'js/engine/feed.js', 'js/engine/items.js',
   'js/engine/truth.js', 'js/engine/actions.js', 'js/engine/sim.js', 'js/engine/objectives.js', 'js/engine/guide.js', 'js/engine/opponents.js',
   'js/engine/events.js', 'js/engine/scoring.js', 'js/engine/engine.js', 'js/engine/levels.js',
-  'js/llm/offline.js', 'js/llm/shape.js', 'js/llm/client.js', 'js/llm/prompts.js'
+  'js/llm/offline.js', 'js/llm/shape.js', 'js/llm/client.js', 'js/llm/prompts.js',
+  'js/editor/levelgen.js'
 ];
 
 /* opts.extraGlobals: injected into the context (e.g. fetch for real LLM calls);

@@ -373,6 +373,151 @@
     return lv;
   }
 
+  /* ---------- structure: fields in the wrong place ---------- */
+
+  /* Fields that belong under another key; normalize() would silently drop them at the top level. */
+  var MISPLACED = { side: 'objectives.side', stages: 'objectives.stages' };
+  /* Top-level-only sections that a lost closing bracket can push into a list entry. `events` is
+     legitimate inside opponents, `abilities` too, so they are handled per host. */
+  var TOP_ONLY = ['meta', 'client', 'incident', 'facts', 'contract', 'initialStats', 'tuning', 'factions', 'platforms', 'personas',
+    'seedPosts', 'items', 'objectives', 'opponents', 'randomEvents', 'victory', 'defeat', 'grading', 'guide', 'ai', 'offline'];
+  var HOSTS = ['opponents', 'events', 'seedPosts', 'personas', 'facts', 'factions'];
+
+  function nestedTopFields(raw, fn) {
+    HOSTS.forEach(function (h) {
+      arr(raw[h]).forEach(function (o, i) {
+        if (!U.isObj(o)) return;
+        Object.keys(o).forEach(function (k) {
+          var top = TOP_ONLY.indexOf(k) >= 0 || (k === 'events' && h !== 'opponents');
+          if (top) fn(h, i, k, o);
+        });
+      });
+    });
+  }
+
+  function structureWarnings(raw, W) {
+    if (!U.isObj(raw)) return;
+    Object.keys(raw).forEach(function (k) {
+      if (DEFAULTS[k] !== undefined) return;
+      W(k, MISPLACED[k] ? '「' + k + '」应放在 ' + MISPLACED[k] + '，写在顶层会被忽略' : '未知的顶层字段「' + k + '」，会被忽略');
+    });
+    nestedTopFields(raw, function (h, i, k) {
+      W(h + '[' + i + '].' + k, '「' + k + '」是顶层字段，嵌在 ' + h + '[' + i + '] 里会被忽略（可能少写了一个闭括号）');
+    });
+  }
+
+  /* AI drafts only: move misplaced sections back where they belong and drop tutorial steps.
+   * Returns { level, fixes[] } with a readable line per change. */
+  function repairDraft(raw) {
+    var lv = U.isObj(raw) ? U.deepClone(raw) : {};
+    var fixes = [];
+    Object.keys(MISPLACED).forEach(function (k) {
+      if (lv[k] === undefined) return;
+      if (!U.isObj(lv.objectives)) lv.objectives = {};
+      if (lv.objectives[k] === undefined) {
+        lv.objectives[k] = lv[k];
+        fixes.push('把顶层的「' + k + '」移到 ' + MISPLACED[k]);
+      } else fixes.push('删除重复的顶层「' + k + '」');
+      delete lv[k];
+    });
+    nestedTopFields(lv, function (h, i, k, o) {
+      if (lv[k] === undefined) {
+        lv[k] = o[k];
+        fixes.push('把误嵌在 ' + h + '[' + i + '] 里的「' + k + '」移回顶层');
+      } else fixes.push('删除误嵌在 ' + h + '[' + i + '] 里的重复「' + k + '」');
+      delete o[k];
+    });
+    if (lv.guide !== undefined) {
+      delete lv.guide;
+      fixes.push('删除教程步骤 guide（只用于教程关）');
+    }
+    return { level: lv, fixes: fixes };
+  }
+
+  /* ---------- reachability: conditions that can never hold ---------- */
+
+  /* flags the engine sets by itself, and the skill that does it (null: opponents / regulators) */
+  var ENGINE_FLAGS = { suppressed: 'trend_remove', clientLied: 'investigate', rectified: 'rectify', abroad: null, regulated: null };
+
+  function walk(x, path, fn) {
+    if (Array.isArray(x)) x.forEach(function (v, i) { walk(v, path + '[' + i + ']', fn); });
+    else if (U.isObj(x)) {
+      fn(x, path);
+      Object.keys(x).forEach(function (k) { walk(x[k], path ? path + '.' + k : k, fn); });
+    }
+  }
+
+  function reachability(lv, W) {
+    var skills = {};
+    lv.items.enabled.forEach(function (id) { skills[id] = true; });
+    lv.items.custom.forEach(function (c) { skills[c.id] = true; });
+    var flagsSet = {};
+    var refs = [];
+    walk(lv, '', function (o, path) {
+      if (o.type === 'flag' && o.name) flagsSet[o.name] = true;
+      if (o.type === 'unlock' && o.items) [].concat(o.items).forEach(function (id) {
+        if (!skills[id]) W(path + '.items', '解锁的技能「' + id + '」不在 items.enabled 里，解锁不会生效', true);
+      });
+      if (typeof o.var === 'string') refs.push({ v: o.var, path: path });
+    });
+    var seen = {};
+    refs.forEach(function (r) {
+      var parts = r.v.split('.');
+      var msg = '';
+      if (parts[0] === 'flags') {
+        var name = parts.slice(1).join('.');
+        if (flagsSet[name]) return;
+        if (ENGINE_FLAGS.hasOwnProperty(name)) {
+          var by = ENGINE_FLAGS[name];
+          if (by && !skills[by]) msg = '标记「' + name + '」只有技能「' + by + '」会设置，但本关没有启用它';
+        } else msg = '标记「' + name + '」没有任何 flag 效果会设置，这个条件永远不成立';
+      } else if ((parts[0] === 'itemUses' || parts[0] === 'itemUsesTurn') && parts[1] && !skills[parts[1]]) {
+        msg = '技能「' + parts[1] + '」本关没有启用，使用次数永远是 0';
+      }
+      if (msg && !seen[r.path]) { seen[r.path] = true; W(r.path, msg, true); }
+    });
+    stageSkills(lv, flagsSet, W);
+  }
+
+  /* Required main-quest tasks that need a skill the player cannot have yet at that stage: the tier
+     reached by earlier stage rewards is too low and nothing else unlocks it. */
+  function stageSkills(lv, flagsSet, W) {
+    var tierOf = function (id) {
+      var c = lv.items.custom.filter(function (x) { return x.id === id; })[0];
+      var d = c || WW.Data.items[id];
+      return (d && d.tier) || 1;
+    };
+    /* unlocks outside the stage chain (events, side tasks, task rewards) may come at any time */
+    var elsewhere = {}, elsewhereTier = 0;
+    walk([lv.events, lv.opponents, lv.objectives.side, lv.objectives.stages.map(function (s) { return s.tasks; })], '', function (o) {
+      if (o.type !== 'unlock') return;
+      if (o.tier) elsewhereTier = Math.max(elsewhereTier, Number(o.tier) || 0);
+      [].concat(o.items || []).forEach(function (id) { elsewhere[id] = true; });
+    });
+    var tier = lv.items.startTier || 1, unlocked = {};
+    lv.objectives.stages.forEach(function (s, i) {
+      s.tasks.forEach(function (t, j) {
+        if (!t.required) return;
+        walk(t.complete, '', function (o) {
+          if (typeof o.var !== 'string') return;
+          var p = o.var.split('.'), id = null;
+          if (p[0] === 'itemUses') id = p[1];
+          else if (p[0] === 'flags' && ENGINE_FLAGS[p[1]] && !flagsSet[p[1]]) id = ENGINE_FLAGS[p[1]];
+          if (!id || lv.items.unlocks[id] || unlocked[id] || elsewhere[id]) return;
+          var need = tierOf(id);
+          if (need <= tier || need <= elsewhereTier) return;
+          W('objectives.stages[' + i + '].tasks[' + j + '].complete', '必做子任务「' + t.title + '」要用技能「' + id + '」（第 ' + need + ' 级），但到这一阶段只解锁到第 ' + tier +
+            ' 级，除“看不见的大手”外都会卡死。请在前面阶段的奖励里解锁它，或改成可选任务', true);
+        });
+      });
+      walk(s.rewards, '', function (o) {
+        if (o.type !== 'unlock') return;
+        if (o.tier) tier = Math.max(tier, Number(o.tier) || 0);
+        [].concat(o.items || []).forEach(function (id) { unlocked[id] = true; });
+      });
+    });
+  }
+
   /* ---------- validation ---------- */
 
   function validate(level) {
@@ -385,8 +530,10 @@
       return { errors: [{ path: '', msg: '关卡结构无法解析：' + e.message }], warnings: [], level: null };
     }
     var E = function (path, msg) { errors.push({ path: path, msg: msg }); };
-    var W = function (path, msg) { warnings.push({ path: path, msg: msg }); };
+    /* blocking: the level loads but part of it can never work (AI generation sends these back for a fix) */
+    var W = function (path, msg, blocking) { warnings.push(blocking ? { path: path, msg: msg, blocking: true } : { path: path, msg: msg }); };
 
+    structureWarnings(level, W);
     if (!level || !level.meta || !level.meta.title) W('meta.title', '建议填写关卡标题');
     if (!lv.incident.summary) W('incident.summary', '建议填写事件概要（AI 生成内容依赖它）');
 
@@ -503,6 +650,13 @@
     });
     if (!lv.facts.length) W('facts', '没有设置事实与真相，谎言债、打脸、铁拳判定都不会生效');
 
+    reachability(lv, W);
+
+    /* semantic check on a fresh game; needs the engine (editor, game, tests) and a sound level */
+    if (!errors.length && WW.Engine && WW.Objectives && WW.Objectives.lintStart) {
+      try { WW.Objectives.lintStart(lv).forEach(function (w) { W(w.path, w.msg, true); }); } catch (e) { /* a level that cannot start shows up elsewhere */ }
+    }
+
     return { errors: errors, warnings: warnings, level: lv };
   }
 
@@ -527,6 +681,7 @@
     stageDefaults: stageDefaults,
     normalize: normalize,
     validate: validate,
+    repairDraft: repairDraft,
     blank: blank,
     slug: slug
   };

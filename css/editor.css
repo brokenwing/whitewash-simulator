@@ -73,3 +73,9 @@
 
 /* AI generation log */
 .gen-log { display: flex; flex-direction: column; gap: 4px; max-height: 260px; overflow-y: auto; font-size: 13px; }
+.gen-row { padding: 4px 8px; border-radius: 6px; background: var(--panel-2); color: var(--ink-3); }
+.gen-row.run { color: var(--ink); }
+.gen-row.good { color: var(--good-ink); }
+.gen-row.warn { color: var(--serious); }
+.gen-row.bad { color: var(--crit-ink); white-space: pre-wrap; }
+.gen-summary { display: flex; flex-direction: column; gap: 2px; white-space: pre-wrap; }

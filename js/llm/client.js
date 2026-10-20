@@ -152,6 +152,60 @@
 
   /* ---------------------------------------------------------------- JSON */
 
+  function parseLoose(body) {
+    try { return JSON.parse(body); } catch (e) { return JSON.parse(body.replace(/,\s*([}\]])/g, '$1')); }
+  }
+
+  /* Re-balances brackets the way small models get them wrong in long outputs: a closer that does not
+     match the open container either closes the missing ones (when that container is open further down)
+     or is dropped; a closer that would end the root while the text goes on with "," or another closer is dropped; raw
+     newlines inside strings are escaped; an unterminated string / open containers at the end are closed. */
+  function rebalance(t) {
+    var out = '', stack = [], inStr = false, esc = false;
+    for (var i = 0; i < t.length; i++) {
+      var c = t[i];
+      if (inStr) {
+        if (esc) esc = false;
+        else if (c === '\\') esc = true;
+        else if (c === '"') inStr = false;
+        else if (c === '\n') { out += '\\n'; continue; }
+        else if (c === '\r') continue;
+        out += c;
+        continue;
+      }
+      if (c === '"') { inStr = true; out += c; continue; }
+      if (c === '{' || c === '[') { stack.push(c); out += c; continue; }
+      if (c === '}' || c === ']') {
+        var want = c === '}' ? '{' : '[';
+        if (!stack.length) break;
+        if (stack[stack.length - 1] !== want) {
+          if (stack.lastIndexOf(want) < 0) continue;
+          while (stack[stack.length - 1] !== want) out += stack.pop() === '{' ? '}' : ']';
+        }
+        if (stack.length === 1 && /^\s*[,\]}]/.test(t.slice(i + 1))) continue;
+        stack.pop();
+        out += c;
+        if (!stack.length) break;
+        continue;
+      }
+      out += c;
+    }
+    if (inStr) out += '"';
+    out = out.replace(/[,:\s]+$/, '');
+    while (stack.length) out += stack.pop() === '{' ? '}' : ']';
+    return out;
+  }
+
+  function jsonError(e, body) {
+    var err = LLMError('JSON 解析失败：' + e.message, 'json');
+    var m = /position (\d+)/.exec(e.message);
+    if (m) {
+      err.pos = Number(m[1]);
+      err.snippet = body.slice(Math.max(0, err.pos - 120), err.pos + 120);
+    }
+    return err;
+  }
+
   function extractJSON(text) {
     var t = String(text || '').trim();
     var fence = t.match(/```(?:json)?\s*([\s\S]*?)```/i);
@@ -175,15 +229,31 @@
       }
     }
     var body = end > 0 ? t.slice(start, end + 1) : t.slice(start);
-    try {
-      return JSON.parse(body);
-    } catch (e) {
-      try {
-        return JSON.parse(body.replace(/,\s*([}\]])/g, '$1'));
-      } catch (e2) {
-        throw LLMError('JSON 解析失败：' + e2.message, 'json');
-      }
+    /* text that carries on with structure after the "root" closed means an extra closer upstream:
+       the balanced prefix would be a silently truncated object, so go straight to re-balancing */
+    var overClosed = end > 0 && /^\s*[,\]}"]/.test(t.slice(end + 1));
+    var first;
+    if (!overClosed) {
+      try { return parseLoose(body); } catch (e) { first = e; }
     }
+    try {
+      return parseLoose(rebalance(t.slice(start)));
+    } catch (e2) {
+      throw jsonError(first || e2, first ? body : t.slice(start));
+    }
+  }
+
+  /* "output was cut off" with the token counts that explain why (OpenAI or Anthropic usage shape) */
+  function truncationMessage(usage) {
+    var u = usage || {};
+    var inTok = u.prompt_tokens || u.input_tokens || 0;
+    var outTok = u.completion_tokens || u.output_tokens || 0;
+    var think = (u.completion_tokens_details && u.completion_tokens_details.reasoning_tokens) || 0;
+    var msg = '输出被截断';
+    if (inTok || outTok) msg += '：提示词 ' + inTok + ' + 输出 ' + outTok + ' token' + (think ? '（其中思考 ' + think + '）' : '');
+    msg += '。本地模型请调大上下文长度';
+    if (think) msg += '，或在「AI 设置」里把思考强度设为关闭';
+    return msg + '。';
   }
 
   /* ---------------------------------------------------------------- logging */
@@ -269,8 +339,8 @@
       }).then(function (msg) {
         if (msg.stop_reason === 'refusal') throw LLMError('模型拒绝了这个请求', 'refusal');
         var text = (msg.content || []).filter(function (b) { return b.type === 'text'; }).map(function (b) { return b.text; }).join('');
-        if (msg.stop_reason === 'max_tokens' && o.shape) throw LLMError('输出被截断（max_tokens）', 'truncated');
-        return { text: text, usage: msg.usage || null, model: msg.model || s.model };
+        if (msg.stop_reason === 'max_tokens' && o.shape) throw LLMError(truncationMessage(msg.usage), 'truncated');
+        return { text: text, usage: msg.usage || null, model: msg.model || s.model, finishReason: msg.stop_reason === 'max_tokens' ? 'length' : (msg.stop_reason || '') };
       }, function (e) {
         if (e && e.code && e.code !== 'error' && !(e instanceof Anthropic.APIError)) throw e;
         throw anthropicError(Anthropic, e);
@@ -406,20 +476,27 @@
       if (body.stream) {
         var text = '';
         var usage = null;
+        var finish = '';
         return readSSE(res, function (chunk) {
-          var delta = chunk.choices && chunk.choices[0] && chunk.choices[0].delta;
+          var ch = chunk.choices && chunk.choices[0];
+          var delta = ch && ch.delta;
           if (delta && delta.content) {
             text += delta.content;
             o.onText(delta.content);
           }
+          if (ch && ch.finish_reason) finish = ch.finish_reason;
           if (chunk.usage) usage = chunk.usage;
-        }).then(function () { return { text: text, usage: usage, model: s.model }; });
+        }).then(function () { return { text: text, usage: usage, model: s.model, finishReason: finish }; });
       }
       return res.json().then(function (j) {
         var choice = j.choices && j.choices[0];
         var content = choice && choice.message ? choice.message.content : '';
         if (Array.isArray(content)) content = content.map(function (c) { return c.text || ''; }).join('');
-        return { text: content || '', usage: j.usage || null, model: j.model || s.model };
+        return { text: content || '', usage: j.usage || null, model: j.model || s.model, finishReason: (choice && choice.finish_reason) || '' };
+      }).then(function (r) {
+        /* same rule as the Anthropic path: a structured task cut off by the token limit is a failure */
+        if (r.finishReason === 'length' && o.shape) throw LLMError(truncationMessage(r.usage), 'truncated');
+        return r;
       });
     }).catch(function (e) {
       if (e && e.name === 'AbortError') throw LLMError('请求超时（' + s.timeoutSec + ' 秒）', 'timeout');
@@ -485,6 +562,7 @@
     isReady: isReady,
     effectiveBase: effectiveBase,
     extractJSON: extractJSON,
+    truncationMessage: truncationMessage,
     chat: chat,
     test: test,
     logs: logs,

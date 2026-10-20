@@ -87,7 +87,7 @@ flowchart TB
 | `js/engine/levels.js` | 关卡注册表、动态加载内置关卡、导入解析、导出脚本 |
 | `js/llm/` | AI 设置与适配器（`client.js`）、任务提示词与运行器（`prompts.js`）、输出结构（`shape.js`）、离线规则（`offline.js`） |
 | `js/ui/` | 界面：`app.js` 选关 · `game.js` 作战室 · `statement.js` 公文编辑器 · `items.js` 道具对话框 · `charts.js` 图表 · `settings.js` 设置 · `dom.js` 安全的 DOM 工具 |
-| `js/editor/` | 编辑器：`fields.js` 字段元数据 · `forms.js` 表单渲染 · `editor.js` 主程序 · `ai-assist.js` AI 生成 |
+| `js/editor/` | 编辑器：`fields.js` 字段元数据 · `forms.js` 表单渲染 · `editor.js` 主程序 · `levelgen.js` 分段生成关卡（无 DOM，评测也用）· `ai-assist.js` AI 生成弹窗与分区补全 |
 | `levels/` | `manifest.js` 内置关卡清单 + 每关一个文件 |
 | `tools/serve.py` | 可选的本地静态服务 + LLM 跨域转发 |
 | `tests/run.js` | Node 测试：单元测试 + 自动平衡模拟 |

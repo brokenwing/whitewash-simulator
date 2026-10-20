@@ -40,7 +40,7 @@
 | 本地 Ollama | OpenAI 兼容 | `http://localhost:11434/v1` | `qwen2.5:14b`（无需 Key） |
 | 本地 LM Studio | OpenAI 兼容 | `http://localhost:1234/v1` | 填 LM Studio 中已加载模型的标识（无需 Key） |
 
-> LM Studio：需要先在 Developer 页启动本地服务器，并在服务器设置里打开 **Enable CORS**（或者勾选本地代理走 `tools/serve.py`）。它的 JSON 模式只接受 `json_schema`，所以这个预设直接发严格 JSON Schema（和 Claude 的结构化输出用同一份 schema），由 LM Studio 按语法约束生成，输出一定是合法 JSON。
+> LM Studio：需要先在 Developer 页启动本地服务器，并在服务器设置里打开 **Enable CORS**（或者勾选本地代理走 `tools/serve.py`）。它的 JSON 模式只接受 `json_schema`，所以这个预设直接发严格 JSON Schema（和 Claude 的结构化输出用同一份 schema），由 LM Studio 按语法约束生成，输出一定是合法 JSON。加载模型时建议把上下文长度（Context Length）设到 **32k 以上**：LM Studio 常见的默认值 16k 对思考模型偏紧，思考 token 也占上下文，可能还没写正文就被截断（游戏会提示“输出被截断：提示词 X + 输出 Y token（其中思考 Z）”）。
 
 ---
 
@@ -58,7 +58,7 @@ flowchart LR
   O1 --> O2["流式：SSE data: 行，[DONE] 结束"]
 ```
 
-- **Anthropic**：浏览器直连需要的 `anthropic-dangerous-direct-browser-access` 头由 SDK 自动加上。按任务设置 `effort`：筛帖、网评、水军、控评、软文、自定义道具等用 `low`；公文补全/润色/评审、铁拳判定、结案报告、编辑器分区补全用 `medium`；编辑器一句话生成关卡用 `high`。`stop_reason` 为 `refusal` 或 JSON 任务被 `max_tokens` 截断时视为失败，回退离线。如果中转服务不认 `output_config`/`effort`/`fallbacks` 等参数（返回 400），会自动切换到兼容模式重发。
+- **Anthropic**：浏览器直连需要的 `anthropic-dangerous-direct-browser-access` 头由 SDK 自动加上。按任务设置 `effort`：筛帖、网评、水军、控评、软文、自定义道具等用 `low`；公文补全/润色/评审、铁拳判定、结案报告、编辑器分区补全用 `medium`；编辑器一句话生成关卡的前 3 段用 `medium`、任务和事件段用 `high`。`stop_reason` 为 `refusal` 或 JSON 任务被 `max_tokens` 截断时视为失败，回退离线。如果中转服务不认 `output_config`/`effort`/`fallbacks` 等参数（返回 400），会自动切换到兼容模式重发。
 - **OpenAI 兼容**：系统提示词末尾会附上 JSON 结构说明；`max_tokens` 上限 8000。开启「JSON 模式」时按顺序尝试三种 `response_format`：预设声明支持 schema 的（目前是 LM Studio）先发 `json_schema`（严格 JSON Schema），其余先发 `json_object`；接口返回 400 就换下一种，最后不带 `response_format`。成功的那一种按“接口地址 + 模型”记在内存里，之后的请求直接用它，不再先吃一次 400；改动设置后会重新探测。
 - **输出上限**：远程接口 `max_tokens` 封顶 8000（不少服务商不接受更大的值）；本地接口（`localhost` / `127.0.0.1`）不封顶，直接用任务自己的预算（多为 16000），Gemini 预设封顶 16000。思考模型的思考 token 也算在 `max_tokens` 里，上限太低时正文会被截断。
 - **思考强度**：标了支持的预设（LM Studio、Gemini）会带 `reasoning_effort`，比任务的 `effort` 低一档：`low`→`none`（不思考）、`medium`→`low`、`high`→`medium`。游戏里的 low 任务（网评、水军、控评等）都是纯写作，思考只会拖慢速度、吃掉输出额度。接口如果因为这个参数返回 400，就去掉它重发，并对这个接口记住不再带。设置里的「思考强度」可以改成固定的关闭 / 低 / 中 / 高（评测时用 `WW_EVAL_REASONING`）。
@@ -126,7 +126,9 @@ Key 的保存方式按系统自动选择（只用 Python 标准库，实现见 `
 | `report.judge` | 召唤铁拳（目标帖未关联事实时） | `violation`、`type`、`confidence`、`reason` | 隐私/辱骂/传言关键词 |
 | `item.custom` | 自定义 AI 道具 | `narration`、`deltas{5 个数值}`、`posts[]` | 关卡给的固定数值或范围的 60% 位置 |
 | `ending.report` | 结案 | `report`、`epilogue` | 统计数据拼报告 + 评级尾声 |
-| `level.generate` / `level.fill` | 编辑器 | 完整关卡 JSON / 追加的列表项 | 不可用（需要配置 AI） |
+| `level.generate.<段>` / `level.fill` | 编辑器 | 分 5 段生成的关卡草稿（见下）/ 追加的列表项 | 不可用（需要配置 AI） |
+
+**一句话生成关卡**（`js/editor/levelgen.js`，编辑器弹窗和 `tests/eval/gen.js` 共用）按依赖顺序分 5 段写：骨架（委托方、事件、事实、阵营）→ 网民画像与初始帖子 → 对手 → 技能、主任务与支线 → 脚本事件。每段只附教程关里对应的那一段作格式参考，并带上前面已写好的部分（只能引用其中的 id）。每段的输出先解析（含括号修复），再和已写好的部分合并校验；解析失败或有引用错误，就把错误和出错位置附近的片段交回模型修一次，还不行再从头重写一次这一段。写完的段会保留，失败的段可以单独重试。最后用 `WW.Schema.repairDraft` 把放错位置的字段挪回原处（顶层的 `side` → `objectives.side`、误嵌进列表项的顶层字段），并去掉教程卡片 `guide`。之所以分段：让小模型一口气写 25KB 的 JSON，一个括号写错整关作废，长思考还可能在写正文前就占满上下文。
 
 **引擎掌控数值**：`feed.generate` 的“发帖位”已经由引擎决定好平台、作者层级、阵营和立场（立场分布来自各阵营当前好感），AI 只填写内容，所以网评永远和数值一致；公文评审的分数也只是输入，好感和热度的变化由引擎公式换算。
 
@@ -140,7 +142,7 @@ flowchart TD
   B -- 否 --> Off["离线规则"]
   B -- 是 --> C["调用（429/5xx/断线自动重试一次；超时按设置）"]
   C -- 网络错误/超时/拒答/截断 --> Off
-  C --> D["extractJSON<br/>去 ``` 代码块 → 括号匹配（忽略字符串里的括号）→ 去尾逗号"]
+  C --> D["extractJSON<br/>去 ``` 代码块 → 括号匹配（忽略字符串里的括号）→ 去尾逗号<br/>→ 仍失败时括号重平衡（补缺的、丢多的、补齐未闭合的字符串）"]
   D -- 失败 --> E["修复请求：把原输出交给模型，只要合法 JSON"]
   E -- 仍失败 --> Off
   E --> F
@@ -150,6 +152,8 @@ flowchart TD
   Off --> I["{data, source: 'offline', error}"]
   I --> J["界面提示“AI 调用失败，已改用离线规则”（8 秒内只提示一次）"]
 ```
+
+OpenAI 兼容接口返回 `finish_reason: "length"`、Anthropic 返回 `stop_reason: "max_tokens"` 时，带结构的任务直接按截断失败处理，错误信息里带上提示词、输出和思考的 token 数。
 
 所有 AI 文本都以纯文本节点渲染，不会被当作 HTML 执行。
 
@@ -234,6 +238,14 @@ node tests/eval/eval.js --tasks posts.classify,report.judge --repeat 3 --compare
 | `--record` | 重新录制局面（引擎改动后执行） |
 
 结果在 `tests/eval/runs/<名字>/`：`run-<模型>.json`（全部原始数据）、`report-<模型>.md`（汇总）、`report-<模型>.html`（逐用例并排查看 AI 输出、离线结果、判分，可人工打 1~5 分并导出）。
+
+### 一句话生成关卡
+
+```bash
+node tests/eval/gen.js --premises 0,1,2 --seeds 10
+```
+
+用同一组环境变量调用被测模型，按编辑器的分段流程生成关卡（内置 3 个事件设定，也可以用 `--premise "…"` 自己写），然后：逐段打印耗时、token、修复次数；校验并列出错误、提醒和自动整理；能载入的关卡再让 5 种机器人在大手、正式工两档各打 `--seeds` 局，统计胜率和每个子任务的完成率。结果写到 `tests/eval/runs/<名字>/gen-<i>.json`（关卡）和 `gen-<i>.report.json`。
 
 ### 测什么
 

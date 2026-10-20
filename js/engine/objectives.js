@@ -177,8 +177,27 @@
     return bonus;
   }
 
+  /* Tasks that are live on turn 1 (first-stage tasks, side tasks offered at start) whose `complete`
+   * already holds on a fresh game: they finish immediately. Usually a "keep X all game" goal that
+   * is missing at:'end'. Returns [{path, msg}] warnings. */
+  function lintStart(level) {
+    var game = new WW.Engine.Game(level, { seed: 1 });
+    var lv = game.level;
+    var out = [];
+    var check = function (t, path) {
+      if (t.at === 'end' || !t.complete) return;
+      var hit = false;
+      try { hit = WW.Cond.evaluate(t.complete, game); } catch (e) { return; }
+      if (hit) out.push({ path: path + '.complete', msg: '子任务「' + t.title + '」开局时就已满足完成条件，会立刻完成。“全程保持 / 零 X 通关”类目标请加 at:"end"，并用 fail 写违规条件' });
+    };
+    if (lv.objectives.stages[0]) lv.objectives.stages[0].tasks.forEach(function (t, j) { check(t, 'objectives.stages[0].tasks[' + j + ']'); });
+    lv.objectives.side.forEach(function (t, i) { if (t.offer === 'start') check(t, 'objectives.side[' + i + ']'); });
+    return out;
+  }
+
   WW.Objectives = {
     init: init,
+    lintStart: lintStart,
     def: def,
     check: check,
     offer: offer,
