@@ -35,6 +35,6 @@ node tests/linux/browser.js --no-cjk-fonts                          # 模拟没�
 ## 容器里测不到、需要手动确认的
 
 - 在真实桌面上 `./start.sh` 能自动打开默认浏览器（GNOME / KDE，X11 和 Wayland 各试一次）。
-- 桌面钥匙串处于锁定状态时，在「AI 设置」里保存 Key：会弹出解锁窗口，解锁后保存成功。
+- 桌面钥匙串处于锁定状态时，在「AI 设置」里保存 Key：会弹出解锁窗口，解锁后保存成功；10 秒内没解锁时会改存为文件（「AI 设置」里显示由「仅本人可读的文件（0600）」保管），不会报错。
 - Firefox 里用 `file://` 打开 `Start.html`，存档能保存、刷新后还在。
-- 系统没有中文字体时（`fc-list :lang=zh` 为空），界面中文会显示成方块，需要先安装中文字体，比如 `sudo apt install fonts-noto-cjk`。
+- 系统没有中文字体时（`fc-list :lang=zh` 为空），界面中文会显示成方块，需要先安装中文字体（包名见项目 README「快速开始」）。装了以后委托书标题和正文应该是 Noto Serif CJK SC 之类的宋体，而不是黑体。

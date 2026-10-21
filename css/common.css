@@ -89,6 +89,13 @@
   }
 }
 
+/* Official-document typefaces. Linux names must be spelled out: Chromium resolves a bare `serif`
+ * to a Latin font and falls back to a sans CJK face even when Noto Serif CJK is installed. */
+:root {
+  --font-song: "SimSun", "STSong", "Songti SC", "Noto Serif CJK SC", "Noto Serif SC", "Source Han Serif SC", "AR PL UMing CN", serif;
+  --font-fangsong: "FangSong", "STFangsong", "FangSong_GB2312", "Noto Serif CJK SC", "Noto Serif SC", "Source Han Serif SC", "AR PL UMing CN", serif;
+}
+
 * { box-sizing: border-box; }
 
 html, body {

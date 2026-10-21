@@ -46,6 +46,8 @@ The recommended way is the bundled local server (Python 3 standard library only)
 - **Windows**: double-click `start.bat`
 - **Linux / macOS**: run `./start.sh` in a terminal
 
+On Linux, if Chinese text shows up as boxes or the contract letters lack their Song (serif) look, install CJK fonts (they include both sans and serif faces): Debian / Ubuntu `sudo apt install fonts-noto-cjk`, Fedora `sudo dnf install google-noto-sans-cjk-fonts google-noto-serif-cjk-fonts`, Arch `sudo pacman -S noto-fonts-cjk`.
+
 Both scripts take an optional port argument (default 8765), e.g. `start.bat 9000`. You can also start the server manually:
 
 ```bash

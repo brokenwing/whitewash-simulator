@@ -30,6 +30,8 @@
 - **Windows**：双击 `start.bat`
 - **Linux / macOS**：在终端运行 `./start.sh`
 
+Linux 上如果界面中文显示成方块，或者委托书没有宋体效果，请安装中文字体（同时含黑体和宋体）：Debian / Ubuntu `sudo apt install fonts-noto-cjk`，Fedora `sudo dnf install google-noto-sans-cjk-fonts google-noto-serif-cjk-fonts`，Arch `sudo pacman -S noto-fonts-cjk`。
+
 两个脚本都可以带一个端口参数（默认 8765），例如 `start.bat 9000`。也可以手动启动：
 
 ```bash

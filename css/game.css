@@ -64,12 +64,12 @@
 }
 .briefing-doc .doc-red {
   text-align: center; color: #c8161d; font-size: clamp(22px, 4vw, 32px); font-weight: 800; letter-spacing: .25em;
-  font-family: "SimSun", "STSong", "Songti SC", serif;
+  font-family: var(--font-song);
 }
 .briefing-doc .doc-no { text-align: center; color: #6b6b67; font-size: 13px; margin: 6px 0 4px; }
 .briefing-doc .doc-rule { height: 3px; background: #c8161d; margin: 10px 0 18px; }
-.briefing-doc h2 { text-align: center; margin: 0 0 16px; font-size: 20px; font-family: "SimSun", "STSong", "Songti SC", serif; }
-.briefing-doc p, .briefing-doc li { font-family: "FangSong", "STFangsong", "FangSong_GB2312", serif; font-size: 16px; line-height: 1.9; }
+.briefing-doc h2 { text-align: center; margin: 0 0 16px; font-size: 20px; font-family: var(--font-song); }
+.briefing-doc p, .briefing-doc li { font-family: var(--font-fangsong); font-size: 16px; line-height: 1.9; }
 .briefing-doc .label-col { color: #6b6b67; }
 .brief-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px 22px; margin: 14px 0; }
 .brief-box { border: 1px dashed #c9c3b6; border-radius: 6px; padding: 10px 12px; background: rgba(255, 255, 255, .6); }
@@ -381,15 +381,15 @@ body:has(.modal-mask) .post.flash { animation-play-state: paused; }
   background: #fbf8f1; color: #1b1b1a; border-radius: 6px; padding: 20px 22px 26px; position: relative; min-height: 420px;
   box-shadow: inset 0 0 0 1px #e6dfcf;
 }
-.red-doc .doc-red { text-align: center; color: #c8161d; font-size: 24px; font-weight: 800; letter-spacing: .3em; font-family: "SimSun", "STSong", "Songti SC", serif; }
+.red-doc .doc-red { text-align: center; color: #c8161d; font-size: 24px; font-weight: 800; letter-spacing: .3em; font-family: var(--font-song); }
 .red-doc .doc-rule { height: 2px; background: #c8161d; margin: 8px 0 12px; }
 .red-doc input.doc-title {
   width: 100%; border: 0; border-bottom: 1px dashed #d0c8b6; background: transparent; text-align: center; font-size: 19px; font-weight: 700;
-  font-family: "SimSun", "STSong", "Songti SC", serif; color: #1b1b1a; padding: 4px; outline: none;
+  font-family: var(--font-song); color: #1b1b1a; padding: 4px; outline: none;
 }
 .red-doc textarea.doc-text {
   width: 100%; min-height: 330px; border: 0; background: transparent; resize: vertical; outline: none; color: #1b1b1a;
-  font-family: "FangSong", "STFangsong", "FangSong_GB2312", serif; font-size: 16px; line-height: 1.95; margin-top: 10px;
+  font-family: var(--font-fangsong); font-size: 16px; line-height: 1.95; margin-top: 10px;
 }
 .red-doc.blue { background: #1f4fa3; color: #fff; box-shadow: none; }
 .red-doc.blue .doc-red, .red-doc.blue .doc-rule { display: none; }

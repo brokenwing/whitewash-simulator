@@ -97,7 +97,14 @@ if os.name == "nt":
 
 # ---------------------------------------------------------------------- Linux secret-tool
 def _secret_tool(args, stdin=None):
-    return subprocess.run(["secret-tool"] + args, input=stdin, capture_output=True, text=True, timeout=10)
+    """A hung keyring (locked, unlock prompt never shown) or a vanished binary counts as a failed call,
+    so callers fall back exactly as they do for a non-zero exit."""
+    cmd = ["secret-tool"] + args
+    try:
+        return subprocess.run(cmd, input=stdin, capture_output=True, text=True, timeout=10)
+    except (subprocess.TimeoutExpired, OSError) as exc:
+        sys.stderr.write("[keystore] secret-tool %s 失败：%s\n" % (args[0], type(exc).__name__))
+        return subprocess.CompletedProcess(cmd, 1, "", type(exc).__name__)
 
 
 def _secret_attrs(origin):
