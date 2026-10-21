@@ -110,6 +110,7 @@ start.bat / start.sh  One-click start (Windows / Linux, macOS)
 tools/serve.py        Local static server + LLM CORS proxy + API key custody
 tools/keystore.py     Key storage backends (env var / DPAPI / keyring / 0600 file)
 tests/run.js          Unit tests and automated balance simulation
+tests/linux/          Linux compatibility tests
 docs/                 Documentation
 ```
 
@@ -135,6 +136,12 @@ To evaluate AI generation quality (bring your own key, or use `--mock` for a fre
 
 ```bash
 node tests/eval/eval.js --mock
+```
+
+To check Linux compatibility (start script, local server, key custody, headless browser smoke test), see [tests/linux/README.md](tests/linux/README.md) (Chinese):
+
+```bash
+tests/linux/run.sh
 ```
 
 ## Disclaimer

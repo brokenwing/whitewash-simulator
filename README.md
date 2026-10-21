@@ -92,6 +92,7 @@ start.bat / start.sh  一键启动（Windows / Linux、macOS）
 tools/serve.py        本地静态服务 + LLM 跨域转发 + API Key 托管
 tools/keystore.py     Key 托管的存储（环境变量 / DPAPI / 钥匙串 / 0600 文件）
 tests/run.js          单元测试与自动平衡模拟
+tests/linux/          Linux 兼容性测试
 docs/                 文档
 ```
 
@@ -117,6 +118,12 @@ AI 生成效果评测（需要自备 Key，或用 `--mock` 零成本自检）见
 
 ```bash
 node tests/eval/eval.js --mock
+```
+
+在 Linux 上验证兼容性（启动脚本、本地服务、Key 托管、无头浏览器冒烟测试），见 [tests/linux/README.md](tests/linux/README.md)：
+
+```bash
+tests/linux/run.sh
 ```
 
 ## 声明
