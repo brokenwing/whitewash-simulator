@@ -23,8 +23,8 @@ module.exports = [
   Comp('autobrake', 'continue', 'explain', { sincere: 0.5, admit: 0 }, {
     followup: null,
     args: {
-      type: 'explain', channel: 'weibo', title: '关于车展事件的情况说明', tone: { sincere: 0.5, admit: 0 },
-      draft: '尊敬的各位车主、各位网友：\n近日，一位车主在车展现场的维权引发广泛关注，我们第一时间联系了车主本人。'
+      type: 'explain', channel: 'weibo', title: '关于高速追尾事件的情况说明', tone: { sincere: 0.5, admit: 0 },
+      draft: '尊敬的各位车主、各位网友：\n近日，一位车主在高速上发生的追尾事故引发广泛关注，我们第一时间联系了车主本人。'
     },
     gold: { leak: [] }
   }),

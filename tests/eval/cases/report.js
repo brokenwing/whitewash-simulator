@@ -18,7 +18,7 @@ module.exports = [
   R('milktea', 'true_hidden', 'truthful', '离职店员', '围脖', '听说是总部默许门店改标签的，我们店群里有截图，店长说是上面让这么干的', false, true),
   R('milktea', 'insult', 'insult', '路过骂一句', '颤音', '那个店长就是个畜生，长得也恶心，全家都不是好东西', true),
 
-  R('autobrake', 'true_defect', 'truthful', '匿名工程师', '知否', '极昼这个批次的智驾就是有刹车识别缺陷，内部测试早就发现了，只是没修', false, true),
+  R('autobrake', 'true_defect', 'truthful', '匿名工程师', '知否', '极昼这个批次的智驾就是有误识别急刹的缺陷，内部测试早就发现了，只是没修', false, true),
   R('autobrake', 'rumor_tamper', 'rumor', '数码爆料王', '围脖', '极昼连夜篡改了车主的行车数据，删掉了刹车记录，实锤了', true, true),
   R('autobrake', 'true_emotional', 'truthful', '愤怒的车主', '颤音', '已经不止一起了！类似事故至少三起，极昼还在说是个例，良心呢？', false),
 

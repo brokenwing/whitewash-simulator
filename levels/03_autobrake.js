@@ -7,7 +7,7 @@ WW.Levels.register({
     "difficulty": 4,
     "cover": "🚗",
     "order": 3,
-    "description": "车主在车展展台上拉横幅维权，智驾刹车失灵的视频全网疯传。客户咬定“用户操作不当”，可技术党已经在逐帧分析了。",
+    "description": "高速上开着智驾，前方空无一车，车子却一脚急刹，后车直接追尾。行车记录仪视频全网疯传。客户咬定“用户操作不当”，可技术党已经在逐帧分析了。",
     "tags": ["安全事故", "技术党", "高难"]
   },
   "client": {
@@ -25,15 +25,15 @@ WW.Levels.register({
     ]
   },
   "incident": {
-    "summary": "一位极昼汽车车主在车展展台上拉横幅维权，称自己的车在开启智能驾驶时刹车失灵、追尾前车。行车记录仪视频全网疯传，“极昼汽车刹车失灵”登顶热搜。",
+    "summary": "一位极昼汽车车主在高速上开启智能驾驶时，车辆在前方无车的情况下突然急刹，被后车追尾，两车多人受伤。前后两车的行车记录仪视频全网疯传，“极昼汽车幽灵刹车”登顶热搜。",
     "background": "极昼汽车主打“智驾安全”，当月交付量刚创新高，下个月要发布新车型。",
-    "keywords": ["刹车失灵", "智驾", "车展维权", "极昼汽车"],
+    "keywords": ["幽灵刹车", "智驾", "高速追尾", "极昼汽车"],
     "severity": 75
   },
   "facts": [
     {
-      "id": "f1", "text": "特定批次车辆的智驾软件存在刹车识别缺陷", "clientClaim": "系统没有问题，是车主操作不当",
-      "isTrue": true, "regulatory": true, "weight": 3, "keywords": ["刹车", "缺陷", "软件", "失灵", "操作不当", "识别"],
+      "id": "f1", "text": "特定批次车辆的智驾软件存在误识别缺陷，会把路面阴影当成障碍物急刹", "clientClaim": "系统没有问题，是车主操作不当",
+      "isTrue": true, "regulatory": true, "weight": 3, "keywords": ["刹车", "缺陷", "软件", "急刹", "操作不当", "识别"],
       "evidence": { "turn": 5, "chance": 0.6, "source": "车主群汇总的同款故障视频", "suppressBy": ["settle"] }
     },
     {
@@ -60,7 +60,7 @@ WW.Levels.register({
   ],
   "platforms": ["weibo", "douyin", "bilibili", "zhihu", "tieba", "news", "xiaohongshu", "overseas"],
   "personas": [
-    { "id": "p_owner", "name": "车展维权的李女士", "faction": "victim", "tier": "kol", "platform": "weibo", "style": "愤怒、坚定、不怕事", "opp": "owners" },
+    { "id": "p_owner", "name": "高速被追尾的车主阿凯", "faction": "victim", "tier": "kol", "platform": "weibo", "style": "愤怒、坚定、不怕事", "opp": "owners" },
     { "id": "p_tech", "name": "老司机测评", "faction": "sleuth", "tier": "bigv", "platform": "bilibili", "style": "技术流、逐帧分析、讲数据" },
     { "id": "p_forum", "name": "论坛技术宅", "faction": "sleuth", "tier": "normal", "platform": "tieba", "style": "贴日志、贴代码" },
     { "id": "p_media", "name": "汽车之声", "faction": "media", "tier": "media", "platform": "news", "style": "行业媒体，追问细节" },
@@ -68,14 +68,14 @@ WW.Levels.register({
     { "id": "p_rival", "name": "北辰汽车官方", "faction": "rival", "tier": "bigv", "platform": "weibo", "style": "一本正经地拉踩", "opp": "rival_car" }
   ],
   "seedPosts": [
-    { "persona": "p_owner", "platform": "weibo", "stance": -2, "fact": "f1", "likes": 680000, "tags": ["维权", "视频"], "content": "我在车展上拉横幅不是为了闹事！我的车开着智驾，前车减速它不刹，我踩刹车也没用！视频在这，极昼汽车给我一个说法！" },
-    { "persona": "p_tech", "platform": "bilibili", "stance": -2, "fact": "f1", "likes": 230000, "tags": ["逐帧分析"], "content": "逐帧分析行车记录仪：碰撞前 2.1 秒系统没有任何减速动作，制动灯也没亮。这不像操作问题。" },
-    { "persona": "p_forum", "platform": "tieba", "stance": -1, "fact": "f2", "likes": 18000, "content": "楼主同款车型也遇到过一次智驾不刹车，当时以为是自己的问题，有人一起吗？" },
-    { "persona": "p_media", "platform": "news", "stance": -1, "likes": 150000, "content": "车主称智驾刹车失灵，极昼汽车回应称“将配合调查”。业内人士呼吁尽快公开完整行车数据。" },
+    { "persona": "p_owner", "platform": "weibo", "stance": -2, "fact": "f1", "likes": 680000, "tags": ["维权", "视频"], "content": "我根本没踩刹车！高速上开着智驾，前面一辆车都没有，它突然一脚急刹从 110 降到 30，后车根本躲不开。视频在这，极昼汽车给我一个说法！" },
+    { "persona": "p_tech", "platform": "bilibili", "stance": -2, "fact": "f1", "likes": 230000, "tags": ["逐帧分析"], "content": "逐帧分析行车记录仪：急刹前 3 秒前方 200 米内没有任何车辆和障碍物，刹车踏板信号一直是零。这不像操作问题。" },
+    { "persona": "p_forum", "platform": "tieba", "stance": -1, "fact": "f2", "likes": 18000, "content": "楼主同款车型也遇到过一次智驾无故急刹，当时以为是自己的问题，有人一起吗？" },
+    { "persona": "p_media", "platform": "news", "stance": -1, "likes": 150000, "content": "车主称智驾无故急刹导致追尾，极昼汽车回应称“将配合调查”。业内人士呼吁尽快公开完整行车数据。" },
     { "persona": "p_ownerfan", "platform": "douyin", "stance": 1, "likes": 21000, "content": "开了两年极昼，智驾一直很稳。真相出来之前别急着站队。" },
     { "persona": "p_rival", "platform": "weibo", "stance": -1, "likes": 36000, "tags": ["蹭热度"], "opp": "rival_car", "content": "安全是汽车的底线。北辰的 AEB 系统每一次升级都会公开测试报告。" },
     { "author": "吃瓜情报局", "tier": "bigv", "faction": "media", "platform": "weibo", "stance": -2, "fact": "f3", "likes": 90000, "tags": ["网传"], "content": "网传极昼汽车连夜修改了车主的行车数据？？" },
-    { "author": "路过的驾校教练", "tier": "normal", "faction": "passerby", "platform": "weibo", "stance": -2, "likes": 44000, "content": "在车展上拉横幅的那一刻，就知道这事小不了。" }
+    { "author": "被判全责的后车司机", "tier": "normal", "faction": "passerby", "platform": "weibo", "stance": -2, "likes": 44000, "content": "追尾算我全责，我认。可前面那车在高速上好端端一脚急刹，换谁能躲得开？" }
   ],
   "items": {
     "enabled": ["statement", "shill", "delete", "control", "trend_remove", "throttle", "distraction", "kol", "legal", "iron_fist", "expose", "monitor", "investigate", "settle", "coopt", "scapegoat", "endorse", "rectify"],
@@ -154,7 +154,7 @@ WW.Levels.register({
           "effects": [
             { "type": "opponent", "opp": "owners", "strength": 15 },
             { "type": "stat", "stat": "heat", "delta": 6 },
-            { "type": "posts", "count": 2, "stance": -2, "opp": "owners", "hint": "更多同款车主站出来讲述自己的刹车失灵经历" }
+            { "type": "posts", "count": 2, "stance": -2, "opp": "owners", "hint": "更多同款车主站出来讲述自己在高速上被无故急刹的经历" }
           ]
         }
       ]
@@ -167,7 +167,7 @@ WW.Levels.register({
         { "use": "dig_past", "weight": 2 },
         { "use": "black_traffic", "weight": 1 }
       ],
-      "pastScandals": [{ "text": "极昼汽车去年就有车主投诉过“幽灵刹车”", "isTrue": true }],
+      "pastScandals": [{ "text": "极昼汽车去年就有车主投诉过车机黑屏、倒车影像失灵", "isTrue": true }],
       "dirt": ["雇营销号写拉踩通稿"]
     },
     {
@@ -225,7 +225,7 @@ WW.Levels.register({
   },
   "offline": {
     "posts": {
-      "-2": ["拿用户当小白鼠？", "智驾不刹车，这谁敢开", "技术党都逐帧分析了，还说操作不当？"],
+      "-2": ["拿用户当小白鼠？", "智驾平白无故急刹，这谁敢开", "技术党都逐帧分析了，还说操作不当？"],
       "-1": ["等完整行车数据", "{client}的回应全是术语，就是不说人话"],
       "1": ["开了两年没出过问题，等调查结果吧", "先别带节奏，等数据"],
       "2": ["{client}加油，相信会给车主一个交代"]
