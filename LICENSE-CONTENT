@@ -6,7 +6,7 @@ Copyright 2026 brokenwing
 
   - levels/    内置关卡的剧本、文案与数据
   - docs/      文档
-  - README.md  说明文字
+  - README.md、README.en.md  说明文字
 
 你可以复制、分发、改编这些内容，也可以用于商业目的，但须：
   - 署名：注明原作者（brokenwing）和出处（公关洗地模拟器），附上许可链接；
@@ -20,3 +20,31 @@ Copyright 2026 brokenwing
 
 使用这些内容时，同样适用 NOTICE 里的声明：内容为虚构讽刺，不代表作者立场，
 也不鼓励现实中的舆论操纵。
+
+----------------------------------------------------------------------
+
+Whitewash Simulator (公关洗地模拟器): License for Text Content
+
+Copyright 2026 brokenwing
+
+The following content is licensed under Creative Commons Attribution 4.0
+International (CC BY 4.0):
+
+  - levels/                  Scripts, text and data of the built-in levels
+  - docs/                    Documentation
+  - README.md, README.en.md  Project description
+
+You may copy, redistribute and adapt this content, including for commercial
+purposes, provided that you:
+  - give attribution: credit the original author (brokenwing) and the source
+    (Whitewash Simulator / 公关洗地模拟器), and link to the license;
+  - indicate whether you made changes.
+
+Full license text: https://creativecommons.org/licenses/by/4.0/legalcode
+
+This license does not apply to the code (js/, css/, *.html, tests/, tools/,
+start.bat, start.sh), which is licensed under the MIT License; see LICENSE.
+
+The disclaimer in NOTICE also applies when you use this content: it is
+fictional satire, does not represent the author's views, and does not
+encourage manipulating public opinion in real life.

@@ -1,5 +1,7 @@
 # 公关洗地模拟器
 
+**简体中文** | [English](README.en.md)
+
 > 每一单都是一场舆论战。删帖、控评、水军、召唤铁拳……以及偶尔，说真话。
 
 一款结合大语言模型的中式危机公关模拟游戏，纯 HTML/JS 实现，无需构建。你经营一家公关公司，每一关是一单委托：客户出了事，给你一笔预算和若干回合，你要在合同期内把舆论“洗”回来——同时提防甲方骗你、证据曝光打脸、水军被扒、对家召唤铁拳。
@@ -125,7 +127,7 @@ node tests/eval/eval.js --mock
 ## 许可
 
 - 代码（`js/`、`css/`、`*.html`、`tests/`、`tools/`、启动脚本）：[MIT](LICENSE)。
-- 文字内容（`levels/`、`docs/`、本说明）：[CC BY 4.0](LICENSE-CONTENT)。
+- 文字内容（`levels/`、`docs/`、本说明及英文版 `README.en.md`）：[CC BY 4.0](LICENSE-CONTENT)。
 - [NOTICE](NOTICE) 汇总了上面的声明，分发本项目或其衍生作品时请一并保留。
 
 Copyright 2026 brokenwing

@@ -1,6 +1,6 @@
 /*
  * Disclaimer texts shown in the game and the editor, and put at the top of exported stories.
- * Keep in step with NOTICE and the 声明 section of README.md.
+ * Keep in step with NOTICE and the 声明 / Disclaimer sections of README.md and README.en.md.
  */
 (function (WW) {
   'use strict';
